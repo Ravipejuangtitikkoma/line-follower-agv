@@ -3,7 +3,7 @@
 > **Ringkasan 30 Detik:**  
 > Proyek ini adalah **Robot AGV (*Automated Guided Vehicle*) Line Follower 4WD** berbasis **Mappi32 (ESP32)** untuk mengantar barang otonom di arena grid **3 m × 3 m**.  
 > Saat dinyalakan, program utama (`mobil_code.ino`) otomatis menunggu 2 detik lalu menjalankan rute **Pulang-Pergi (PP) 24-State** dari `START`, berbelok di simpang `N0` dan `N2`, berhenti jeda di jalur atas, lalu putar balik 180° dan pulang parkir ke `START`.
-
+   
 ---
 
 ## Daftar Isi
