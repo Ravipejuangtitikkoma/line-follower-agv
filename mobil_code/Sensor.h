@@ -67,7 +67,6 @@ struct LineData {
 
 // Variabel Global Sensor
 static volatile long encoderTicks = 0;
-static portMUX_TYPE encoderMux    = portMUX_INITIALIZER_UNLOCKED;
 static float jarakValidTerakhir   = 999.0;
 static float jarakSaatIni         = 999.0;
 static bool statusHalangan        = false;
@@ -82,44 +81,14 @@ inline void resetWingTimestamps() {
   lastRightWingTime = 0;
 }
 
-// Interrupt ISR Encoder Roda Kiri (IRAM_ATTR + critical section aman untuk ESP32)
-static void IRAM_ATTR bacaEncoderISR() {
+// Interrupt ISR Encoder Roda Kiri (Aman dari conflict IRAM)
+inline void bacaEncoderISR() {
   int valB = digitalRead(pinEncoderB);
-  portENTER_CRITICAL_ISR(&encoderMux);
   if (valB == HIGH) {
     encoderTicks++;
   } else {
     encoderTicks--;
   }
-  portEXIT_CRITICAL_ISR(&encoderMux);
-}
-
-// Pembacaan pulsa encoder secara atomik (thread/ISR-safe di ESP32)
-inline long bacaEncoderTicks() {
-  portENTER_CRITICAL(&encoderMux);
-  long ticks = encoderTicks;
-  portEXIT_CRITICAL(&encoderMux);
-  return ticks;
-}
-
-// Reset pulsa encoder global ke 0
-inline void resetEncoderTicks() {
-  portENTER_CRITICAL(&encoderMux);
-  encoderTicks = 0;
-  portEXIT_CRITICAL(&encoderMux);
-}
-
-// Konversi selisih pulsa encoder (deltaTicks) ke jarak tempuh dalam cm.
-// Menggunakan labs() agar kebal terhadap perbedaan polaritas kabel Fase A/B saat roda maju.
-inline float ticksKeCm(long deltaTicks) {
-  if (ENCODER_TICKS_PER_PUTARAN <= 0.0f) return 0.0f;
-  return ((float)labs(deltaTicks) / ENCODER_TICKS_PER_PUTARAN) * KELILING_RODA_CM;
-}
-
-// Konversi target jarak (cm) ke perkiraan jumlah pulsa encoder (ticks)
-inline long cmKeTicks(float cm) {
-  if (KELILING_RODA_CM <= 0.0f) return 0;
-  return (long)((cm / KELILING_RODA_CM) * ENCODER_TICKS_PER_PUTARAN + 0.5f);
 }
 
 // Inisialisasi Seluruh Sensor

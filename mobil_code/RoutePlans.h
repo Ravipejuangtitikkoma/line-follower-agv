@@ -15,8 +15,7 @@ enum StepTrigger : uint8_t {
   TRIG_IMMEDIATE,     // Langsung eksekusi tanpa menunggu sensor (seperti SENS_NONE_MOTION)
   TRIG_T_KIRI,        // Simpang T melintang / kiri: gelap semua [11111] atau (b1 && b2 && b3)
   TRIG_CABANG_KANAN,  // Cabang kanan topologis: (b5 && b4) && (b3 || totalAktif>=3 || gelapSemua)
-  TRIG_PEREMPATAN,    // Simpang 4 / garis melintang: gelap semua atau isPerempatan (toleransi 35ms)
-  TRIG_ENCODER_JARAK  // Target jarak tempuh encoder roda kiri (targetJarakCm) tercapai
+  TRIG_PEREMPATAN     // Simpang 4 / garis melintang: gelap semua atau isPerempatan (toleransi 35ms)
 };
 
 // Jenis aksi utama setelah fase follow + pre-move + pause
@@ -33,10 +32,9 @@ enum StepAction : uint8_t {
 // Struktur deklaratif 1 langkah rute AGV
 struct PlanStep {
   const char* label;          // Nama step untuk telemetri Serial Monitor
-  StepTrigger trigger;        // Kondisi simpang / jarak pemicu
+  StepTrigger trigger;        // Kondisi simpang pemicu
   uint16_t    lockoutMs;      // Waktu minimal jalan sebelum trigger aktif (TA Lockout Timer)
-  float       targetJarakCm;  // Target jarak encoder dalam cm (hanya dipakai jika TRIG_ENCODER_JARAK)
-  uint16_t    preMoveMs;      // Durasi offset maju (59ms) atau penetrasi PD sebelum rem
+  uint16_t    preMoveMs;      // Durasi offset maju (59ms) atau penetrasi PD (495ms) sebelum rem
   bool        preMoveUsePD;   // false = offset maju langsung, true = penetrasi tracking PD
   uint8_t     brakePwm;       // Daya rem aktif berlawanan arah (PWM)
   uint16_t    brakeMs;        // Durasi rem aktif (ms)
@@ -45,27 +43,29 @@ struct PlanStep {
 };
 
 // Indeks step khusus untuk perintah cepat operator (LANJUT / PULANG)
-const int IDX_STEP_CHECKPOINT_A = 2; // Step N2 -> Checkpoint A (Encoder ~50 cm + Jeda 3 detik)
-const int IDX_STEP_CHECKPOINT_C = 3; // Step A -> Checkpoint C (Encoder ~200 cm + Jeda 3 detik)
-const int IDX_STEP_UTURN_C      = 4; // Step awal rute pulang (U-Turn 180° setelah C)
-const int IDX_STEP_TITIK_A      = IDX_STEP_CHECKPOINT_A;
-const int IDX_STEP_UTURN_B      = IDX_STEP_UTURN_C;
+const int IDX_STEP_TITIK_A = 2; // Step jeda 3 detik di Titik A sebelum melintasi S4-1
+const int IDX_STEP_UTURN_B = 4; // Step awal rute pulang (U-Turn 180° di Titik B)
 
 // ====================================================================
-// TABEL RUTE PETA RIIL PULANG-PERGI (START -> N0 -> N2 -> A -> C -> START)
+// TABEL RUTE PETA RIIL PULANG-PERGI (START -> A -> B -> START)
+// Pemetaan 1:1 terhadap 25 State FSM sebelumnya:
+//   Idx 0: State 1..3   | Idx 1: State 4..6   | Idx 2: State 7..9
+//   Idx 3: State 10..12 | Idx 4: State 13     | Idx 5: State 14..16
+//   Idx 6: State 17..19 | Idx 7: State 20..21 | Idx 8: State 22..23
+//   Idx 9: State 24..25
 // ====================================================================
 const PlanStep RUTE_REAL_PP[] = {
-  // label,               trigger,             lockout,                    targetCm,         preMove,                    usePD, brkPwm, brkMs, pause,                    action
-  { "N0_BELOK_KIRI",      TRIG_T_KIRI,         250,                        0.0f,             OFFSET_MAJU_BELOK_MS,       false, 85,     35,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_LEFT        }, // 0
-  { "N2_BELOK_KANAN",     TRIG_CABANG_KANAN,   WAKTU_MINIMAL_RUAS2_MS,     0.0f,             OFFSET_MAJU_SIMPANG_KANAN_MS, false, 85,   35,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_RIGHT       }, // 1
-  { "CHECKPOINT_A",       TRIG_ENCODER_JARAK,  100,                        JARAK_N2_KE_A_CM, 0,                          false, 85,     35,    DURASI_JEDA_TITIK_A_MS,   ACT_PAUSE_ONLY       }, // 2
-  { "CHECKPOINT_C",       TRIG_ENCODER_JARAK,  100,                        JARAK_A_KE_C_CM,  0,                          false, 85,     35,    DURASI_JEDA_TITIK_C_MS,   ACT_PAUSE_ONLY       }, // 3
-  { "UTURN_180_C",        TRIG_IMMEDIATE,      0,                          0.0f,             0,                          false, 0,      0,     0,                        ACT_UTURN_180        }, // 4
-  { "PULANG_N10",         TRIG_PEREMPATAN,     350,                        0.0f,             0,                          false, 85,     35,    DURASI_STOP_S4_PULANG_MS, ACT_CROSS_STRAIGHT   }, // 5
-  { "PULANG_N6",          TRIG_PEREMPATAN,     400,                        0.0f,             0,                          false, 85,     35,    DURASI_STOP_S4_PULANG_MS, ACT_CROSS_STRAIGHT   }, // 6
-  { "PULANG_N2_KIRI",     TRIG_T_KIRI,         350,                        0.0f,             OFFSET_MAJU_BELOK_MS,       false, 85,     35,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_LEFT_PULANG }, // 7
-  { "PULANG_N0_KANAN",    TRIG_CABANG_KANAN,   WAKTU_MINIMAL_RUAS2_MS,     0.0f,             OFFSET_MAJU_SIMPANG_KANAN_MS, false, 85,   35,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_RIGHT       }, // 8
-  { "FINISH_START",       TRIG_PEREMPATAN,     350,                        0.0f,             0,                          false, 85,     35,    50,                       ACT_STOP_MISSION     }  // 9
+  // label,               trigger,             lockout,                    preMove,                    usePD, brkPwm, brkMs, pause,                    action
+  { "S1_BELOK_KIRI",      TRIG_T_KIRI,         250,                        OFFSET_MAJU_BELOK_MS,       false, 85,     35,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_LEFT        }, // 0
+  { "S2_BELOK_KANAN",     TRIG_CABANG_KANAN,   WAKTU_MINIMAL_RUAS2_MS,     OFFSET_MAJU_SIMPANG_KANAN_MS, false, 85,   35,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_RIGHT       }, // 1
+  { "TITIK_A_S4_1",       TRIG_PEREMPATAN,     350,                        0,                          false, 85,     35,    DURASI_JEDA_TITIK_A_MS,   ACT_CROSS_STRAIGHT   }, // 2
+  { "TITIK_B_S4_2",       TRIG_PEREMPATAN,     500,                        DURASI_PENETRASI_TITIK_B_MS, true, 65,     30,    DURASI_JEDA_TITIK_B_MS,   ACT_PAUSE_ONLY       }, // 3
+  { "UTURN_180_B",        TRIG_IMMEDIATE,      0,                          0,                          false, 0,      0,     0,                        ACT_UTURN_180        }, // 4
+  { "PULANG_S4_1",        TRIG_PEREMPATAN,     350,                        0,                          false, 85,     35,    DURASI_STOP_S4_PULANG_MS, ACT_CROSS_STRAIGHT   }, // 5
+  { "PULANG_S4_2",        TRIG_PEREMPATAN,     400,                        0,                          false, 85,     35,    DURASI_STOP_S4_PULANG_MS, ACT_CROSS_STRAIGHT   }, // 6
+  { "PULANG_T_KIRI",      TRIG_T_KIRI,         350,                        OFFSET_MAJU_BELOK_MS,       false, 85,     35,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_LEFT_PULANG }, // 7
+  { "PULANG_CAB_KANAN",   TRIG_CABANG_KANAN,   WAKTU_MINIMAL_RUAS2_MS,     OFFSET_MAJU_SIMPANG_KANAN_MS, false, 85,   35,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_RIGHT       }, // 8
+  { "FINISH_START",       TRIG_PEREMPATAN,     350,                        0,                          false, 85,     35,    50,                       ACT_STOP_MISSION     }  // 9
 };
 
 const int JUMLAH_STEP_RUTE_REAL = sizeof(RUTE_REAL_PP) / sizeof(RUTE_REAL_PP[0]);

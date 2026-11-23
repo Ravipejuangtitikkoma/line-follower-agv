@@ -39,16 +39,6 @@ static float      errSebelumnyaPD       = 0.0f;
 static bool       sudahLepasGarisLama   = false;
 static bool       sudahAutoAlignStart   = false;
 static int        konfirmasiCabangKanan = 0;
-static long       encoderTicksAwalFase  = 0;
-static unsigned long lastWarnEncoderMs  = 0;
-
-inline long getDeltaTicksFase() {
-  return bacaEncoderTicks() - encoderTicksAwalFase;
-}
-
-inline float getJarakFaseCm() {
-  return ticksKeCm(getDeltaTicksFase());
-}
 
 // Helper nama fase untuk log & telemetri
 inline const char* namaFase(StepPhase fase) {
@@ -75,9 +65,7 @@ inline void gantiFase(StepPhase faseBaru, const char* alasan) {
 
   if (faseBaru == PHASE_FOLLOW) {
     resetWingTimestamps();
-    errSebelumnyaPD      = 0.0f;
-    encoderTicksAwalFase = bacaEncoderTicks();
-    lastWarnEncoderMs    = millis();
+    errSebelumnyaPD = 0.0f;
   }
 
   const char* label = (stepIdxSaatIni >= 0 && stepIdxSaatIni < JUMLAH_STEP_RUTE_REAL)
@@ -94,17 +82,6 @@ inline void gantiFase(StepPhase faseBaru, const char* alasan) {
   Serial.print(namaFase(faseBaru));
   Serial.print("] Alasan: ");
   Serial.println(alasan);
-
-  if (faseBaru == PHASE_FOLLOW &&
-      stepIdxSaatIni >= 0 && stepIdxSaatIni < JUMLAH_STEP_RUTE_REAL &&
-      RUTE_REAL_PP[stepIdxSaatIni].trigger == TRIG_ENCODER_JARAK) {
-    float targetCm = RUTE_REAL_PP[stepIdxSaatIni].targetJarakCm;
-    Serial.print(">>> [ENCODER START] Mulai hitung jarak -> Target: ");
-    Serial.print(targetCm, 1);
-    Serial.print(" cm (~");
-    Serial.print(cmKeTicks(targetCm));
-    Serial.println(" ticks)");
-  }
 }
 
 // Helper berpindah ke step berikutnya di tabel PlanStep
@@ -236,29 +213,6 @@ inline bool evaluasiTrigger(const PlanStep& step, const LineData& line, unsigned
 
     case TRIG_PEREMPATAN:
       return (line.isGelapSemua() || line.isPerempatan);
-
-    case TRIG_ENCODER_JARAK: {
-      if (step.targetJarakCm <= 0.0f) return false;
-      long deltaTicks = getDeltaTicksFase();
-      float jarakCm   = ticksKeCm(deltaTicks);
-
-      // Peringatan jika mobil sudah berjalan > 1.5 detik namun encoder belum membaca pulsa
-      if (durasiDiFase >= 1500 && deltaTicks == 0 && (millis() - lastWarnEncoderMs >= 1000)) {
-        lastWarnEncoderMs = millis();
-        Serial.println("[PERINGATAN ENCODER] Pulsa masih 0! Cek kabel encoder roda kiri (GPIO 32/33) & VCC sensor.");
-      }
-
-      if (jarakCm >= step.targetJarakCm) {
-        Serial.print("\n>>> [ENCODER TARGET TERCAPAI] Jarak: ");
-        Serial.print(jarakCm, 1);
-        Serial.print(" / ");
-        Serial.print(step.targetJarakCm, 1);
-        Serial.print(" cm | Delta Ticks: ");
-        Serial.println(deltaTicks);
-        return true;
-      }
-      return false;
-    }
 
     default:
       return false;
@@ -526,11 +480,8 @@ inline void initNavigationFSM() {
   sudahAutoAlignStart   = false;
   konfirmasiCabangKanan = 0;
   errSebelumnyaPD       = 0.0f;
-  resetEncoderTicks();
-  encoderTicksAwalFase  = 0;
-  lastWarnEncoderMs     = millis();
   resetWingTimestamps();
-  Serial.println("[PLAN ENGINE] Rute Diinisialisasi: START -> N0(Kiri) -> N2(Kanan) -> A(Encoder 50cm, 3s) -> C(Encoder 200cm, 3s) -> Pulang.");
+  Serial.println("[PLAN ENGINE] Modul Data-Driven Plan Engine (10-Step Rute PP) Diinisialisasi.");
 }
 
 // Parser Perintah Operator (Serial Monitor / Paket LoRa)
@@ -540,25 +491,23 @@ inline void prosesPerintah(String cmd) {
   Serial.print("[COMMAND DITERIMA] -> ");
   Serial.println(cmd);
 
-  if (cmd == "START" || cmd == "START_AB" || cmd == "START_AC" || cmd == "1") {
+  if (cmd == "START" || cmd == "START_AB" || cmd == "1") {
     statusMisiSaatIni   = MISI_JALAN_RUTE_REAL;
     stepIdxSaatIni      = 0;
     sudahAutoAlignStart = false;
-    resetEncoderTicks();
-    gantiFase(PHASE_FOLLOW, "Perintah Operator START (Misi START -> N0 -> N2 -> A -> C -> START)");
+    gantiFase(PHASE_FOLLOW, "Perintah Operator START (Misi START -> A -> B -> START)");
   }
   else if (cmd == "LANJUT" || cmd == "GO" || cmd == "NEXT") {
-    if ((stepIdxSaatIni == IDX_STEP_CHECKPOINT_A || stepIdxSaatIni == IDX_STEP_CHECKPOINT_C) &&
-        faseSaatIni == PHASE_PAUSE) {
-      gantiFase(PHASE_ACTION, "Perintah Operator LANJUT (Bypass jeda 3 detik)");
+    if (stepIdxSaatIni == IDX_STEP_TITIK_A && faseSaatIni == PHASE_PAUSE) {
+      gantiFase(PHASE_ACTION, "Perintah Operator LANJUT dari Titik A ke Titik B");
     } else {
-      Serial.println("[INFO] Perintah LANJUT diabaikan (Robot tidak sedang jeda di Checkpoint A / C).");
+      Serial.println("[INFO] Perintah LANJUT diabaikan (Robot tidak sedang jeda di Titik A).");
     }
   }
   else if (cmd == "PULANG" || cmd == "BALIK" || cmd == "RETURN") {
     statusMisiSaatIni = MISI_JALAN_RUTE_REAL;
-    stepIdxSaatIni    = IDX_STEP_UTURN_C;
-    gantiFase(PHASE_ACTION, "Perintah Operator PULANG (Rute C -> START Dimulai)");
+    stepIdxSaatIni    = IDX_STEP_UTURN_B;
+    gantiFase(PHASE_ACTION, "Perintah Operator PULANG (Rute B -> START Dimulai)");
   }
   else if (cmd == "STOP" || cmd == "ESTOP" || cmd == "0") {
     statusMisiSaatIni = MISI_EMERGENCY_STOP;
@@ -572,30 +521,7 @@ inline void prosesPerintah(String cmd) {
   }
   else if (cmd == "RESET") {
     initNavigationFSM();
-    Serial.println(">>> [RESET] Plan Engine & Encoder Di-reset ke Step Awal.");
-  }
-  else if (cmd == "RESET_ENC") {
-    resetEncoderTicks();
-    encoderTicksAwalFase = 0;
-    Serial.println(">>> [RESET_ENC] Pulsa encoder roda kiri di-nolkan.");
-  }
-  else if (cmd == "TEST_ENCODER") {
-    statusMisiSaatIni = MISI_STANDBY;
-    berhentiTotal();
-    resetEncoderTicks();
-    encoderTicksAwalFase = 0;
-    Serial.println("\n>>> [KALIBRASI ENCODER RODA KIRI (5 DETIK)]");
-    Serial.println("Putar roda kiri 1 putaran penuh atau dorong robot 50 cm untuk cek nilai ticks...");
-    for (int i = 0; i < 20; i++) {
-      delay(250);
-      long t = bacaEncoderTicks();
-      Serial.print("  Encoder Ticks: ");
-      Serial.print(t);
-      Serial.print(" | Estimasi Jarak: ");
-      Serial.print(ticksKeCm(t), 2);
-      Serial.println(" cm");
-    }
-    Serial.println(">>> [SELESAI] Sesuaikan ENCODER_TICKS_PER_PUTARAN di Config.h bila perlu.\n");
+    Serial.println(">>> [RESET] Plan Engine Di-reset ke Step Awal.");
   }
   else if (cmd == "STATUS") {
     const char* label = (stepIdxSaatIni >= 0 && stepIdxSaatIni < JUMLAH_STEP_RUTE_REAL)
@@ -605,7 +531,7 @@ inline void prosesPerintah(String cmd) {
     Serial.print("Misi: ");
     switch (statusMisiSaatIni) {
       case MISI_STANDBY:          Serial.println("STANDBY"); break;
-      case MISI_JALAN_RUTE_REAL:  Serial.println("JALAN RUTE REAL (START -> N0 -> N2 -> A -> C -> START)"); break;
+      case MISI_JALAN_RUTE_REAL:  Serial.println("JALAN RUTE REAL (START -> A -> B -> START)"); break;
       case MISI_EMERGENCY_STOP:   Serial.println("EMERGENCY STOP"); break;
     }
     Serial.print("Step: ");
@@ -614,20 +540,6 @@ inline void prosesPerintah(String cmd) {
     Serial.print(label);
     Serial.print(") | Fase: ");
     Serial.println(namaFase(faseSaatIni));
-    Serial.print("Encoder Total: ");
-    Serial.print(bacaEncoderTicks());
-    Serial.print(" ticks | Delta Fase: ");
-    Serial.print(getDeltaTicksFase());
-    Serial.print(" ticks | Jarak Fase: ");
-    Serial.print(getJarakFaseCm(), 1);
-    Serial.print(" cm");
-    if (stepIdxSaatIni >= 0 && stepIdxSaatIni < JUMLAH_STEP_RUTE_REAL &&
-        RUTE_REAL_PP[stepIdxSaatIni].trigger == TRIG_ENCODER_JARAK) {
-      Serial.print(" / Target: ");
-      Serial.print(RUTE_REAL_PP[stepIdxSaatIni].targetJarakCm, 1);
-      Serial.print(" cm");
-    }
-    Serial.println();
     Serial.println("--------------------------------\n");
   }
   else if (cmd == "TEST_KANAN") {
@@ -683,21 +595,6 @@ inline void tampilkanTelemetriFSM(const LineData& line) {
   else if (line.isTikunganKanan) Serial.print("[TIK_KANAN]");
   else if (line.isTikunganKiri) Serial.print("[TIK_KIRI]");
   else Serial.print("[TRACK]");
-
-  if (stepIdxSaatIni >= 0 && stepIdxSaatIni < JUMLAH_STEP_RUTE_REAL &&
-      RUTE_REAL_PP[stepIdxSaatIni].trigger == TRIG_ENCODER_JARAK) {
-    Serial.print(" | Enc: ");
-    Serial.print(getDeltaTicksFase());
-    Serial.print("t (");
-    Serial.print(getJarakFaseCm(), 1);
-    Serial.print("/");
-    Serial.print(RUTE_REAL_PP[stepIdxSaatIni].targetJarakCm, 0);
-    Serial.print("cm)");
-  } else {
-    Serial.print(" | Enc: ");
-    Serial.print(bacaEncoderTicks());
-    Serial.print("t");
-  }
   Serial.println();
 }
 
@@ -734,11 +631,7 @@ inline void updateNavigationFSM(const LineData& line) {
         return;
       }
 
-      if (step.trigger == TRIG_ENCODER_JARAK && (line.isGelapSemua() || line.isPerempatan)) {
-        setKecepatanMotor(KEC_BASE + TRIM_KIRI, KEC_BASE + TRIM_KANAN);
-      } else {
-        jalankanTrackingPD(line, KEC_BASE);
-      }
+      jalankanTrackingPD(line, KEC_BASE);
 
       if (evaluasiTrigger(step, line, durasiDiFase)) {
         gantiFase(PHASE_PRE_MOVE, "Simpang/Trigger Step Terdeteksi");
@@ -782,13 +675,7 @@ inline void updateNavigationFSM(const LineData& line) {
           break;
 
         case ACT_PAUSE_ONLY:
-          if (stepIdxSaatIni == IDX_STEP_CHECKPOINT_C && !OTOMATIS_PULANG_SETELAH_C) {
-            berhentiTotal();
-            statusMisiSaatIni = MISI_STANDBY;
-            Serial.println(">>> [CHECKPOINT C] Jeda 3 detik selesai. Robot STANDBY di C (ketik 'PULANG' untuk kembali ke START).");
-          } else {
-            majuKeStepBerikutnya("Jeda Parkir 3 Detik Selesai -> Lanjut Step Berikutnya");
-          }
+          majuKeStepBerikutnya("Jeda Parkir Selesai -> Lanjut Step Berikutnya");
           break;
 
         case ACT_UTURN_180:
@@ -800,9 +687,9 @@ inline void updateNavigationFSM(const LineData& line) {
           statusMisiSaatIni = MISI_STANDBY;
           Serial.println("\n*******************************************************");
           Serial.println("  [SUKSES] AGV TELAH KEMBALI DI TITIK START SEMPURNA!  ");
-          Serial.println("  Rute Pulang: C -> U-Turn 180° -> N10 -> N6 ->        ");
-          Serial.println("               N2 (Belok Kiri) -> N0 (Belok Kanan) ->  ");
-          Serial.println("               START                                   ");
+          Serial.println("  Rute Pulang: B -> U-Turn 180° -> S4-1 (Stop) ->     ");
+          Serial.println("               S4-2 (Stop) -> Simpang T (Belok Kiri)-> ");
+          Serial.println("               Simpang Cabang (Belok Kanan) -> START   ");
           Serial.println("  Status: STANDBY (Misi 2 Arah Selesai Penuh)          ");
           Serial.println("*******************************************************\n");
           break;
