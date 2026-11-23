@@ -76,4 +76,4 @@ const ArahBelok ARAH_BELOK = ARAH_BELOK_KANAN;
 - '+' / '-' : Naikkan / Turunkan Kecepatan Maju (KEC_BASE)
 - 'K'         : Set Arah Belok ke KANAN
 - 'L'         : Set Arah Belok ke KIRI
-- 'C'         : Toggle Mode Kalibrasi / Visualizer Sensor
+- 'k'         : Buka Mode Visualizer Sensor

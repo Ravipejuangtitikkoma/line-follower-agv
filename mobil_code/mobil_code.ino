@@ -6,7 +6,8 @@
 //   - Motor.h         : Penggerak Motor, Filter Akselerasi, & Soft-Start Ramp
 //   - Sensor.h        : Line Follower 5-Ch TCRT5000, Ultrasonik HC-SR04
 //   - NodeDetector.h  : Algoritma Deteksi Simpang & Kunci Garis Siku
-//   - NavigationFSM.h : 11-State Navigasi Peta Riil (START -> A -> B)
+//   - RoutePlans.h    : Tabel Rute Deklaratif (Data-Driven Plan Engine)
+//   - NavigationFSM.h : Eksekutor 4-Fase Navigasi Peta Riil (START -> A -> B -> START)
 // ====================================================================
 
 #include <Arduino.h>
@@ -14,6 +15,7 @@
 #include "Motor.h"
 #include "Sensor.h"
 #include "NodeDetector.h"
+#include "RoutePlans.h"
 #include "NavigationFSM.h"
 
 // Variabel Pewaktu Telemetri
@@ -49,16 +51,9 @@ void setup() {
   Serial.println("  Ketik 'STATUS'            -> Lihat Status Lengkap Misi & State");
   Serial.println("  Ketik 'TEST_RODA'         -> Diagnostik 4 Arah Roda (Maju/Mundur Tiap Sisi)");
   Serial.println("  Ketik 'TEST_KANAN'        -> Diagnostik Putar Poros Kanan (2 Detik)");
-  Serial.println("  Ketik 'TEST_KIRI'         -> Diagnostik Putar Poros Kiri (2 Detik)");
   Serial.println("  Ketik 'TEST_MUNDUR_KANAN' -> Diagnostik Driver Kanan Mundur (Pin 17 / LPWM)");
-  Serial.println("  Ketik 'TEST_BELOK_KANAN'  -> Tes Langsung Jalur Lurus + Simpang Belok Kanan");
-  if (MULAI_DENGAN_STANDBY) {
-    Serial.println("\n[INFO] Mode STANDBY Aktif: Robot DIAM menunggu perintah Serial.");
-    Serial.println("[INFO] Ketik 'TEST_RODA', 'TEST_BELOK_KANAN', atau 'START' di Serial Monitor.\n");
-  } else {
-    Serial.println("\n[INFO] Mobil otomatis memulai Misi dalam 2 detik...\n");
-    delay(2000);
-  }
+  Serial.println("\n[INFO] Mobil otomatis memulai Misi dalam 2 detik...\n");
+  delay(2000);
 }
 
 void loop() {
@@ -91,15 +86,9 @@ void loop() {
   // 4. PEMBACAAN 5 SENSOR GARIS (1 = Hitam, 0 = Spanduk/Kardus Putih)
   LineData line = bacaSensorGaris();
 
-  // 5. EKSEKUSI HIERARCHICAL FINITE STATE MACHINE (HFSM)
-  // Menjalankan Level 1 (Misi Status) & Level 2 (7 State Navigasi):
-  //   - State 1: Maju lurus PD sampai deteksi simpang 1
-  //   - State 2: Belok kiri sweep (Target S3 & S4 aktif, sebelum S5)
-  //   - State 3: Pelurusan bodi belakang kiri (30 derajat)
-  //   - State 4: Maju ke simpang 2 (Auto-Recovery mundur jika kelewatan)
-  //   - State 5: Belok kanan sweep (Preset khusus tikungan ke-2 anti-bablas)
-  //   - State 6: Pelurusan bodi belakang kanan (Target S3 & S2 aktif, sebelum S1)
-  //   - State 7: Maju lintasan akhir menuju stasiun C
+  // 5. EKSEKUSI DATA-DRIVEN PLAN ENGINE (HFSM)
+  // Menjalankan Level 1 (Misi Status) & Level 2 (Eksekutor 4-Fase atas RUTE_REAL_PP[]):
+  //   - PHASE_FOLLOW -> PHASE_PRE_MOVE -> PHASE_PAUSE -> PHASE_ACTION
   updateNavigationFSM(line);
 
   // 6. TELEMETRI REAL-TIME SERIAL MONITOR (Setiap 250ms)
@@ -108,6 +97,5 @@ void loop() {
     tampilkanTelemetriFSM(line);
   }
 
-  // Sampling sensor cepat 5ms untuk deteksi simpang sigap (PD lurus tetap dipacing 15ms di NavigationFSM.h)
-  delay(5);
+  delay(15);
 }

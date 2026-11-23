@@ -35,7 +35,7 @@ enum ArahBelokKotak {
 };
 
 // >>>>>>>>>> GANTI ARAH BELOK DI VARIABEL INI <<<<<<<<<<
-ArahBelokKotak ARAH_BELOK = ARAH_BELOK_KANAN; 
+ArahBelokKotak ARAH_BELOK = ARAH_BELOK_KIRI; 
 // ====================================================================
 
 

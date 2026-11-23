@@ -70,8 +70,16 @@ static volatile long encoderTicks = 0;
 static float jarakValidTerakhir   = 999.0;
 static float jarakSaatIni         = 999.0;
 static bool statusHalangan        = false;
-static unsigned long lastSonarTime = 0;
-static int arahGarisTerakhir      = 0; // -1 = Kiri, 0 = Lurus/Tengah, +1 = Kanan
+static unsigned long lastSonarTime     = 0;
+static int arahGarisTerakhir           = 0; // -1 = Kiri, 0 = Lurus/Tengah, +1 = Kanan
+static unsigned long lastLeftWingTime  = 0;
+static unsigned long lastRightWingTime = 0;
+
+// Reset timestamp sayap luar setiap selesai belok / transisi step agar tidak bocor
+inline void resetWingTimestamps() {
+  lastLeftWingTime  = 0;
+  lastRightWingTime = 0;
+}
 
 // Interrupt ISR Encoder Roda Kiri (Aman dari conflict IRAM)
 inline void bacaEncoderISR() {
@@ -147,28 +155,59 @@ inline LineData bacaSensorGaris() {
   // Tikungan 90 Derajat ke KIRI: Sensor kiri luar & tengah aktif tebal, sensor kanan kosong
   data.isTikunganKiri  = (data.b1 == 1 && (data.b2 == 1 || data.b3 == 1) && data.b5 == 0);
 
-  // Perempatan: Kedua sensor luar membaca garis melintang bersamaan
-  data.isPerempatan    = (data.b1 == 1 && data.b5 == 1);
+  // Toleransi Miring Perempatan (35ms):
+  // Jika sayap kiri (S1) dan sayap kanan (S5) aktif bersamaan ATAU dalam selisih <= 35ms,
+  // tetap dianggap perempatan sah (tahan posisi masuk miring, tetap kebal S-bend >150ms)
+  unsigned long now = millis();
+  bool leftWingNow  = (data.b1 == 1);
+  bool rightWingNow = (data.b5 == 1);
+  if (leftWingNow)  lastLeftWingTime  = now;
+  if (rightWingNow) lastRightWingTime = now;
+
+  bool crossWings = (leftWingNow && rightWingNow) ||
+                    ((leftWingNow || rightWingNow) &&
+                     (lastLeftWingTime > 0 && now - lastLeftWingTime <= TOLERANSI_MIRING_SIMPANG_MS) &&
+                     (lastRightWingTime > 0 && now - lastRightWingTime <= TOLERANSI_MIRING_SIMPANG_MS));
+
+  bool frontCenterAny = (data.b2 == 1 || data.b3 == 1 || data.b4 == 1);
+
+  // Perempatan: Kedua sensor luar aktif (bersamaan atau toleransi miring 35ms) + garis tengah
+  data.isPerempatan   = crossWings && (frontCenterAny || data.totalAktif >= 3);
 
   // Garis Hilang
   data.isGarisHilang   = (data.totalAktif == 0);
 
-  // 2. HITUNG KOREKSI ERROR POSISI PUSAT MASSA
-  if (data.totalAktif > 0) {
-    float bobot = (data.b1 * -2.0) + (data.b2 * -1.0) + (data.b3 * 0.0) + (data.b4 * 1.0) + (data.b5 * 2.0);
-    data.error = bobot / (float)data.totalAktif;
+  // 2. HITUNG KOREKSI ERROR POSISI PUSAT MASSA (ANTI-GOYANG DI SIMPANG)
+  // Prioritaskan sensor dalam (S2..S4) saat masih di garis agar sayap luar (S1/S5) di cabang T
+  // tidak menarik hidung robot ke samping sebelum simpang terkonfirmasi.
+  if (frontCenterAny) {
+    int innerSum     = data.b2 + data.b3 + data.b4;
+    float bobotDalam = (data.b2 * -1.0f) + (data.b3 * 0.0f) + (data.b4 * 1.0f);
+    data.error       = bobotDalam / (float)innerSum;
 
     // Catat arah terakhir jika robot keluar jalur
-    if (data.error > 0.3) {
+    if (data.error > 0.3f) {
       arahGarisTerakhir = +1; // Terakhir cenderung di kanan
-    } else if (data.error < -0.3) {
+    } else if (data.error < -0.3f) {
       arahGarisTerakhir = -1; // Terakhir cenderung di kiri
     } else {
       arahGarisTerakhir = 0;  // Tepat di tengah
     }
+  } else if (data.totalAktif > 0) {
+    // Fallback ke sayap luar jika seluruh sensor dalam sudah lepas garis
+    float bobotLuar = (data.b1 * -2.0f) + (data.b5 * 2.0f);
+    data.error      = bobotLuar / (float)data.totalAktif;
+
+    if (data.error > 0.3f) {
+      arahGarisTerakhir = +1;
+    } else if (data.error < -0.3f) {
+      arahGarisTerakhir = -1;
+    } else {
+      arahGarisTerakhir = 0;
+    }
   } else {
     // Garis hilang: Jangan paksa 0.0 agar tidak melaju buta lurus ke kardus kosong!
-    data.error = 0.0;
+    data.error = 0.0f;
   }
 
   return data;

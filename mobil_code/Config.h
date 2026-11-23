@@ -41,11 +41,6 @@ const int pinLoRa_SS   = 15;
 const int pinLoRa_RST  = 0;
 const int pinLoRa_DIO0 = 27;
 
-// --- 6. MODE AWAL SAAT MENYALA ---
-// true  = STANDBY dulu (diam menunggu perintah Serial: START / TEST_RODA / TEST_BELOK_KANAN)
-// false = Langsung otomatis jalan misi penuh setelah 2 detik
-const bool MULAI_DENGAN_STANDBY = true;
-
 // ================= PENGATURAN KECEPATAN & KINEMATIKA =================
 // Kecepatan dasar mobil saat lurus (Bertenaga & Responsif di Atas Kardus)
 const int KEC_BASE = 58; 
@@ -96,8 +91,6 @@ const int WAKTU_LEPAS_SUDUT_MIN_MS      = 260; // Timeout pengaman Fase A: jika 
 // Belok Kiri:
 const int KEC_BELOK_KIRI_MAJU    = 134; // Torsi stabil bertenaga penuh (Breakaway Kick 185 PWM tetap aktif di awal)
 const int KEC_BELOK_KIRI_MUNDUR  = 134; 
-const int WAKTU_ABAIKAN_SENSOR_KIRI_MS = 180; // Abaikan sensor 180ms: wajib putar >30° dulu agar tidak mengunci garis lama!
-const int WAKTU_LEPAS_SUDUT_KIRI_MS    = 240; // Timeout pengaman Fase A belok kiri: konfirmasi lepas sudut setelah 240ms
 
 // 4. Parameter Breakaway Torque Kick (Mendobrak Gesekan Statis Ke-4 Roda Serentak)
 const int PWM_BREAKAWAY_KICK           = 185; // Entakan torsi instan agar roda belakang tidak mematung (belok kiri)
@@ -137,6 +130,11 @@ const float JARAK_LEPAS_CM = 35.0; // Jalan lagi jika rintangan sudah > 35 cm
 const unsigned long DEBOUNCE_NODE_MS = 500; // Jeda minimum antar deteksi simpang (ms)
 const unsigned long EXIT_LATCH_MS    = 150; // Waktu minimum sebelum keluar dari simpang
 const int AMBANG_SIMPANG_PENUH       = 4;   // Minimal 4 dari 5 sensor membaca gelap [1 1 1 1 1]
+
+// Toleransi Miring Perempatan (ms): Jika S1 dan S5 aktif dalam selisih <= 35ms,
+// tetap dianggap perempatan sah (tahan posisi masuk miring, kebal S-bend >150ms)
+const unsigned long TOLERANSI_MIRING_SIMPANG_MS = 35;
+const int PERSISTENSI_CABANG_KANAN              = 2;
 
 // ================= PARAMETER RUTE PETA RIIL (START -> A -> B) =================
 const unsigned long DURASI_MENGGELIR_KIRI_MS   = 0;    // 0ms: Putaran buta dihilangkan total sama seperti belok kanan agar tidak overshoot >90° ke kiri

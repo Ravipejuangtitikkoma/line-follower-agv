@@ -134,7 +134,7 @@ void loop() {
       b5 = s5; // Kanan Luar
     } else {
       b1 = s5; // OUT5 jadi Kiri Luar
-      b2 = s4; // OUT4 jadi Kiri Tengah 
+      b2 = s4; // OUT4 jadi Kiri Tengah
       b3 = s3; // OUT3 tetap Tengah
       b4 = s2; // OUT2 jadi Kanan Tengah
       b5 = s1; // OUT1 jadi Kanan Luar
