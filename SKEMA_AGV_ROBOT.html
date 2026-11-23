@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Skema Sistem AGV Grid Line Follower - Mappi32 LoRa</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card-bg: #111827;
+      --card-border: #1f2937;
+      --accent: #3b82f6;
+      --accent-glow: rgba(59, 130, 246, 0.25);
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --font: 'Plus Jakarta Sans', sans-serif;
+      --mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      line-height: 1.6;
+      padding: 2.5rem 1.5rem;
+    }
+
+    .container {
+      max-width: 1040px;
+      margin: 0 auto;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 3rem;
+      position: relative;
+      padding-bottom: 2rem;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    .badge-top {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.35rem 1rem;
+      border-radius: 9999px;
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      color: #60a5fa;
+      font-size: 0.825rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    h1 {
+      font-size: 2.4rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 0.75rem;
+      background: linear-gradient(135deg, #ffffff 30%, #93c5fd 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 1.1rem;
+      max-width: 720px;
+      margin: 0 auto;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 1.75rem;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      opacity: 0.4;
+    }
+
+    .card-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      color: #ffffff;
+    }
+
+    .card-title svg {
+      width: 22px;
+      height: 22px;
+      stroke: var(--accent);
+    }
+
+    /* Peta Arena SVG Container */
+    .arena-box {
+      background: #0d131f;
+      border: 1px solid #1e293b;
+      border-radius: 16px;
+      padding: 1.5rem;
+      margin-bottom: 2.5rem;
+    }
+
+    .svg-wrapper {
+      width: 100%;
+      max-width: 820px;
+      margin: 0 auto;
+      display: block;
+    }
+
+    svg text {
+      font-family: var(--font);
+      user-select: none;
+    }
+
+    /* Table Styling */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+      font-size: 0.9rem;
+    }
+
+    th, td {
+      padding: 0.85rem 1rem;
+      text-align: left;
+      border-bottom: 1px solid #1f2937;
+    }
+
+    th {
+      background: #162032;
+      color: #93c5fd;
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 0.75rem;
+      letter-spacing: 0.05em;
+    }
+
+    tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .code-tag {
+      font-family: var(--mono);
+      background: #0f172a;
+      border: 1px solid #334155;
+      padding: 0.15rem 0.45rem;
+      border-radius: 6px;
+      font-size: 0.825rem;
+      color: #38bdf8;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.2rem 0.6rem;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .status-success {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .status-pending {
+      background: rgba(245, 158, 11, 0.15);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    .alert {
+      padding: 1rem 1.25rem;
+      border-radius: 12px;
+      margin: 1rem 0;
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      font-size: 0.9rem;
+    }
+
+    .alert-warning {
+      background: rgba(245, 158, 11, 0.08);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      color: #fde68a;
+    }
+
+    .alert-info {
+      background: rgba(59, 130, 246, 0.08);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      color: #bfdbfe;
+    }
+
+    /* Step Timeline */
+    .timeline {
+      list-style: none;
+      position: relative;
+      padding-left: 1.75rem;
+      margin-top: 1rem;
+    }
+
+    .timeline::before {
+      content: '';
+      position: absolute;
+      top: 0.5rem;
+      bottom: 0.5rem;
+      left: 6px;
+      width: 2px;
+      background: #334155;
+    }
+
+    .timeline-item {
+      position: relative;
+      margin-bottom: 1.25rem;
+    }
+
+    .timeline-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .timeline-item::before {
+      content: '';
+      position: absolute;
+      left: -1.75rem;
+      top: 0.35rem;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--card-bg);
+      border: 3px solid var(--accent);
+    }
+
+    .timeline-item.active::before {
+      border-color: #facc15;
+      background: #facc15;
+      box-shadow: 0 0 10px rgba(250, 204, 21, 0.6);
+    }
+
+    .step-title {
+      font-weight: 700;
+      color: #ffffff;
+      font-size: 0.95rem;
+    }
+
+    .step-desc {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      margin-top: 0.2rem;
+    }
+
+    footer {
+      text-align: center;
+      margin-top: 4rem;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      border-top: 1px solid var(--card-border);
+      padding-top: 2rem;
+    }
+
+    @media print {
+      body {
+        background: #ffffff;
+        color: #111827;
+      }
+      .card, .arena-box {
+        background: #ffffff;
+        border: 1px solid #d1d5db;
+        box-shadow: none;
+      }
+      h1, .card-title, .step-title {
+        color: #111827;
+        -webkit-text-fill-color: initial;
+      }
+      .code-tag {
+        background: #f3f4f6;
+        color: #1f2937;
+        border-color: #e5e7eb;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    
+    <!-- HEADER -->
+    <header>
+      <div class="badge-top">
+        <span>Arsitektur Sistem & Spesifikasi AGV</span>
+      </div>
+      <h1>Sistem Robot AGV Grid & Kendali LoRa</h1>
+      <p class="subtitle">Dokumen Rancangan Teknis & Navigasi Otonom Berbasis Misi (Mission-Based Delivery) untuk Arena 3m &times; 3m Menggunakan Mikrokontroler Mappi32 (ESP32).</p>
+    </header>
+
+    <!-- EXECUTIVE SUMMARY -->
+    <div class="card" style="margin-bottom: 2rem;">
+      <h2 class="card-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        Maksud & Inti Keinginan Klien
+      </h2>
+      <p style="color: #d1d5db; margin-bottom: 1rem;">
+        Klien menginginkan sebuah sistem <strong>AGV (Automated Guided Vehicle) Mandiri</strong> seperti robot armada gudang pintar modern. Mobil robot <strong>bukan dikendalikan manual arah setirnya dengan remote</strong>, melainkan menerima tugas terstruktur jarak jauh dari Laptop via antena radio LoRa:
+      </p>
+      <div class="grid-2" style="margin-bottom: 0;">
+        <div style="background: rgba(17, 24, 39, 0.7); border: 1px solid #1f2937; padding: 1.2rem; border-radius: 12px;">
+          <h4 style="color: #60a5fa; margin-bottom: 0.5rem; font-size: 0.95rem;">1. Kendali Misi dari Laptop (LoRa Gateway)</h4>
+          <p style="font-size: 0.875rem; color: #9ca3af;">Operator cukup memilih rute tujuan dari komputer (misal: <code>KIRIM KE A &rarr; C &rarr; PULANG</code>). Data dipancarkan melalui radio LoRa frekuensi 922 MHz.</p>
+        </div>
+        <div style="background: rgba(17, 24, 39, 0.7); border: 1px solid #1f2937; padding: 1.2rem; border-radius: 12px;">
+          <h4 style="color: #34d399; margin-bottom: 0.5rem; font-size: 0.95rem;">2. Eksekusi Mandiri & Safety Radar</h4>
+          <p style="font-size: 0.875rem; color: #9ca3af;">Mobil menyusuri garis hitam (Line Follower PD), menghitung simpang (Node), berhenti di stasiun tujuan, dan otomatis rem darurat bila sensor HC-SR04 mendeteksi rintangan &lt; 25 cm.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- PETA ARENA INTERAKTIF SVG -->
+    <div class="arena-box">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 0.75rem;">
+        <div>
+          <h2 class="card-title" style="margin-bottom: 0.25rem;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+            Denah Arena Grid 3m &times; 3m & Rute Misi Klien
+          </h2>
+          <p style="font-size: 0.85rem; color: var(--text-muted);">Garis kuning merepresentasikan rute misi: <code>START &rarr; N0 &rarr; N2 &rarr; [A] &rarr; N6 &rarr; N10 &rarr; [C]</code></p>
+        </div>
+        <div style="display: flex; gap: 0.5rem; font-size: 0.775rem;">
+          <span style="display: flex; align-items: center; gap: 0.35rem; color: #fbbf24;"><span style="width: 10px; height: 10px; background: #fbbf24; border-radius: 2px;"></span> Rute Misi</span>
+          <span style="display: flex; align-items: center; gap: 0.35rem; color: #ef4444;"><span style="width: 10px; height: 10px; background: #ef4444; border-radius: 2px;"></span> Stasiun [A]-[E]</span>
+          <span style="display: flex; align-items: center; gap: 0.35rem; color: #60a5fa;"><span style="width: 10px; height: 10px; background: #2563eb; border-radius: 2px;"></span> Simpang (Node)</span>
+        </div>
+      </div>
+
+      <div class="svg-wrapper">
+        <svg viewBox="0 0 760 520" style="width: 100%; height: auto; background: #070c14; border-radius: 12px; border: 1px solid #1e293b;">
+          <!-- Grid Lines (Hitam Pekat / Abu Tebal) -->
+          <g stroke="#334155" stroke-width="6" stroke-linecap="round">
+            <!-- Horizontal Lines -->
+            <line x1="120" y1="60"  x2="690" y2="60" />
+            <line x1="120" y1="160" x2="690" y2="160" />
+            <line x1="120" y1="340" x2="690" y2="340" />
+            <line x1="120" y1="440" x2="690" y2="440" />
+            <!-- Vertical Lines -->
+            <line x1="120" y1="60"  x2="120" y2="440" />
+            <line x1="310" y1="60"  x2="310" y2="440" />
+            <line x1="500" y1="60"  x2="500" y2="440" />
+            <line x1="690" y1="60"  x2="690" y2="440" />
+            <!-- START Spur Connector into N0 -->
+            <line x1="40"  y1="250" x2="120" y2="250" />
+          </g>
+
+          <!-- Zona Blok Gudang (Biru Tua) -->
+          <!-- Blok A -->
+          <rect x="145" y="80" width="140" height="60" rx="8" fill="#1e3a8a" fill-opacity="0.3" stroke="#2563eb" stroke-dasharray="3 3"/>
+          <text x="215" y="118" fill="#93c5fd" font-size="20" font-weight="700" text-anchor="middle">A</text>
+          
+          <!-- Blok C -->
+          <rect x="525" y="80" width="140" height="60" rx="8" fill="#1e3a8a" fill-opacity="0.3" stroke="#2563eb" stroke-dasharray="3 3"/>
+          <text x="595" y="118" fill="#93c5fd" font-size="20" font-weight="700" text-anchor="middle">C</text>
+
+          <!-- Blok B (Tengah) -->
+          <rect x="335" y="200" width="140" height="100" rx="8" fill="#1e3a8a" fill-opacity="0.3" stroke="#2563eb" stroke-dasharray="3 3"/>
+          <text x="405" y="258" fill="#93c5fd" font-size="24" font-weight="700" text-anchor="middle">B</text>
+
+          <!-- Blok E -->
+          <rect x="145" y="360" width="140" height="60" rx="8" fill="#1e3a8a" fill-opacity="0.3" stroke="#2563eb" stroke-dasharray="3 3"/>
+          <text x="215" y="398" fill="#93c5fd" font-size="20" font-weight="700" text-anchor="middle">E</text>
+
+          <!-- Blok D -->
+          <rect x="525" y="360" width="140" height="60" rx="8" fill="#1e3a8a" fill-opacity="0.3" stroke="#2563eb" stroke-dasharray="3 3"/>
+          <text x="595" y="398" fill="#93c5fd" font-size="20" font-weight="700" text-anchor="middle">D</text>
+
+          <!-- HIGHLIGHT JALUR MISI KUNING (Sesuai Garis Client) -->
+          <g stroke="#facc15" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" opacity="0.95">
+            <!-- Start ke N0 -->
+            <line x1="50" y1="250" x2="120" y2="250" />
+            <!-- N0 ke N2 -->
+            <line x1="120" y1="250" x2="120" y2="160" />
+            <!-- N2 ke [A] ke N6 ke N10 ke [C] ke N14 -->
+            <line x1="120" y1="160" x2="690" y2="160" />
+          </g>
+
+          <!-- NODES (Titik Simpang) -->
+          <!-- Row 1 -->
+          <rect x="110" y="50" width="20" height="20" rx="4" fill="#0f172a" stroke="#60a5fa" stroke-width="2"/>
+          <text x="120" y="42" fill="#93c5fd" font-size="11" font-weight="600" text-anchor="middle">N1</text>
+          
+          <rect x="300" y="50" width="20" height="20" rx="4" fill="#0f172a" stroke="#60a5fa" stroke-width="2"/>
+          <text x="310" y="42" fill="#93c5fd" font-size="11" font-weight="600" text-anchor="middle">N5</text>
+
+          <rect x="490" y="50" width="20" height="20" rx="4" fill="#0f172a" stroke="#60a5fa" stroke-width="2"/>
+          <text x="500" y="42" fill="#93c5fd" font-size="11" font-weight="600" text-anchor="middle">N9</text>
+
+          <rect x="680" y="50" width="20" height="20" rx="4" fill="#0f172a" stroke="#60a5fa" stroke-width="2"/>
+          <text x="690" y="42" fill="#93c5fd" font-size="11" font-weight="600" text-anchor="middle">N13</text>
+
+          <!-- Row 2 -->
+          <rect x="110" y="150" width="20" height="20" rx="4" fill="#0f172a" stroke="#facc15" stroke-width="2"/>
+          <text x="100" y="155" fill="#fef08a" font-size="11" font-weight="700" text-anchor="end">N2</text>
+
+          <rect x="300" y="150" width="20" height="20" rx="4" fill="#0f172a" stroke="#facc15" stroke-width="2"/>
+          <text x="310" y="142" fill="#fef08a" font-size="11" font-weight="700" text-anchor="middle">N6</text>
+
+          <rect x="490" y="150" width="20" height="20" rx="4" fill="#0f172a" stroke="#facc15" stroke-width="2"/>
+          <text x="500" y="142" fill="#fef08a" font-size="11" font-weight="700" text-anchor="middle">N10</text>
+
+          <rect x="680" y="150" width="20" height="20" rx="4" fill="#0f172a" stroke="#facc15" stroke-width="2"/>
+          <text x="715" y="165" fill="#fef08a" font-size="11" font-weight="700" text-anchor="start">N14</text>
+
+          <!-- START & N0 -->
+          <circle cx="45" cy="250" r="14" fill="#10b981" stroke="#34d399" stroke-width="3"/>
+          <text x="45" y="280" fill="#34d399" font-size="12" font-weight="800" text-anchor="middle">START</text>
+
+          <rect x="110" y="240" width="20" height="20" rx="4" fill="#0f172a" stroke="#facc15" stroke-width="2"/>
+          <text x="140" y="255" fill="#fef08a" font-size="11" font-weight="700" text-anchor="start">N0</text>
+
+          <!-- Row 3 -->
+          <rect x="110" y="330" width="20" height="20" rx="4" fill="#0f172a" stroke="#60a5fa" stroke-width="2"/>
+          <text x="100" y="345" fill="#93c5fd" font-size="11" font-weight="600" text-anchor="end">N3</text>
+
+          <rect x="300" y="330" width="20" height="20" rx="4" fill="#0f172a" stroke="#60a5fa" stroke-width="2"/>
+          <text x="310" y="322" fill="#93c5fd" font-size="11" font-weight="600" text-anchor="middle">N7</text>
+
+          <rect x="490" y="330" width="20" height="20" rx="4" fill="#0f172a" stroke="#60a5fa" stroke-width="2"/>
+          <text x="500" y="322" fill="#93c5fd" font-size="11" font-weight="600" text-anchor="middle">N11</text>
+
+          <rect x="680" y="330" width="20" height="20" rx="4" fill="#0f172a" stroke="#60a5fa" stroke-width="2"/>
+          <text x="715" y="345" fill="#93c5fd" font-size="11" font-weight="600" text-anchor="start">N15</text>
+
+          <!-- Row 4 -->
+          <rect x="110" y="430" width="20" height="20" rx="4" fill="#0f172a" stroke="#60a5fa" stroke-width="2"/>
+          <text x="120" y="470" fill="#93c5fd" font-size="11" font-weight="600" text-anchor="middle">N4</text>
+
+          <rect x="300" y="430" width="20" height="20" rx="4" fill="#0f172a" stroke="#60a5fa" stroke-width="2"/>
+          <text x="310" y="470" fill="#93c5fd" font-size="11" font-weight="600" text-anchor="middle">N8</text>
+
+          <rect x="490" y="430" width="20" height="20" rx="4" fill="#0f172a" stroke="#60a5fa" stroke-width="2"/>
+          <text x="500" y="470" fill="#93c5fd" font-size="11" font-weight="600" text-anchor="middle">N12</text>
+
+          <rect x="680" y="430" width="20" height="20" rx="4" fill="#0f172a" stroke="#60a5fa" stroke-width="2"/>
+          <text x="690" y="470" fill="#93c5fd" font-size="11" font-weight="600" text-anchor="middle">N16</text>
+
+          <!-- STASIUN-STASIUN (Kotak Merah Berlabel) -->
+          <!-- Stasiun [A] -->
+          <rect x="205" y="148" width="24" height="24" rx="4" fill="#ef4444" stroke="#ffffff" stroke-width="2"/>
+          <text x="217" y="165" fill="#ffffff" font-size="12" font-weight="800" text-anchor="middle">A</text>
+
+          <!-- Stasiun [C] -->
+          <rect x="585" y="148" width="24" height="24" rx="4" fill="#ef4444" stroke="#ffffff" stroke-width="2"/>
+          <text x="597" y="165" fill="#ffffff" font-size="12" font-weight="800" text-anchor="middle">C</text>
+
+          <!-- Stasiun [B] -->
+          <rect x="395" y="328" width="24" height="24" rx="4" fill="#ef4444" stroke="#ffffff" stroke-width="2"/>
+          <text x="407" y="345" fill="#ffffff" font-size="12" font-weight="800" text-anchor="middle">B</text>
+
+          <!-- Stasiun [E] -->
+          <rect x="205" y="428" width="24" height="24" rx="4" fill="#ef4444" stroke="#ffffff" stroke-width="2"/>
+          <text x="217" y="445" fill="#ffffff" font-size="12" font-weight="800" text-anchor="middle">E</text>
+
+          <!-- Stasiun [D] -->
+          <rect x="585" y="428" width="24" height="24" rx="4" fill="#ef4444" stroke="#ffffff" stroke-width="2"/>
+          <text x="597" y="445" fill="#ffffff" font-size="12" font-weight="800" text-anchor="middle">D</text>
+
+          <!-- Skala 3 Meter x 3 Meter -->
+          <line x1="120" y1="495" x2="690" y2="495" stroke="#64748b" stroke-width="2" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+          <text x="405" y="512" fill="#94a3b8" font-size="12" font-weight="600" text-anchor="middle">Panjang Arena: 3 Meter</text>
+
+          <line x1="745" y1="60" x2="745" y2="440" stroke="#64748b" stroke-width="2"/>
+          <text x="755" y="255" fill="#94a3b8" font-size="12" font-weight="600" text-anchor="middle" transform="rotate(90, 755, 255)">Lebar Arena: 3 Meter</text>
+        </svg>
+      </div>
+    </div>
+
+    <!-- TABEL LANGKAH MISI & PIN MAPPI32 -->
+    <div class="grid-2">
+      
+      <!-- LANGKAH MISI -->
+      <div class="card">
+        <h2 class="card-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          Urutan Tahap Gerak AGV
+        </h2>
+        <ul class="timeline">
+          <li class="timeline-item active">
+            <div class="step-title">1. Start &rarr; N0 &rarr; N2</div>
+            <div class="step-desc">Maju keluar dari START, belok kiri di Node N0, menyusuri garis vertikal ke utara sampai tiba di N2.</div>
+          </li>
+          <li class="timeline-item active">
+            <div class="step-title">2. N2 &rarr; Stasiun [A]</div>
+            <div class="step-desc">Belok kanan 90&deg; di N2. Encoder menghitung jarak &plusmn;50 cm lalu <strong>berhenti 3 detik di Stasiun A</strong> (proses muat barang).</div>
+          </li>
+          <li class="timeline-item active">
+            <div class="step-title">3. Stasiun [A] &rarr; N6 &rarr; N10 &rarr; Stasiun [C]</div>
+            <div class="step-desc">Lanjut maju lurus menembus persimpangan N6 dan N10. Begitu jarak encoder tercapai, <strong>berhenti 3 detik di Stasiun C</strong> (proses bongkar barang).</div>
+          </li>
+          <li class="timeline-item">
+            <div class="step-title">4. Stasiun [C] &rarr; N14 (U-Turn Pulang)</div>
+            <div class="step-desc">Maju ke N14 lalu lakukan putar balik poros 180&deg;.</div>
+          </li>
+          <li class="timeline-item">
+            <div class="step-title">5. Perjalanan Pulang ke START</div>
+            <div class="step-desc">Menyusuri jalur balik (N14 &rarr; N10 &rarr; N6 &rarr; N2 belok kiri &rarr; N0 belok kanan &rarr; parkir di START). Kirim sinyal LoRa: <code>MISSION COMPLETED</code>.</div>
+          </li>
+        </ul>
+      </div>
+
+      <!-- PIN WIRING -->
+      <div class="card">
+        <h2 class="card-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
+          Konfigurasi Pin Mappi32 Robot
+        </h2>
+        <div class="alert alert-warning">
+          <strong>Perhatian:</strong> Pin LoRa Internal (IO 14, 13, 12, 15, 0, 27) tidak boleh dipasang kabel eksternal!
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Fungsi Hardware</th>
+              <th>Pin Modul</th>
+              <th>Pin ESP32 Mappi32</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Motor Kiri (Maju / Mundur)</td>
+              <td>IN1 / IN2</td>
+              <td><span class="code-tag">IO25</span> / <span class="code-tag">IO26</span></td>
+            </tr>
+            <tr>
+              <td>Motor Kanan (Maju / Mundur)</td>
+              <td>IN3 / IN4</td>
+              <td><span class="code-tag">IO16</span> / <span class="code-tag">IO17</span> (Solder)</td>
+            </tr>
+            <tr>
+              <td>Sensor Garis 5 Channel</td>
+              <td>S1 s/d S5</td>
+              <td><span class="code-tag">34, 35, 36, 39, 23</span></td>
+            </tr>
+            <tr>
+              <td>Encoder Motor Kiri</td>
+              <td>Fase A / Fase B</td>
+              <td><span class="code-tag">IO32</span> / <span class="code-tag">IO33</span></td>
+            </tr>
+            <tr>
+              <td>Ultrasonik HC-SR04</td>
+              <td>TRIG / ECHO</td>
+              <td><span class="code-tag">IO19</span> / <span class="code-tag">IO18</span></td>
+            </tr>
+            <tr>
+              <td>LoRa Internal KMtek</td>
+              <td>SPI & DIO0</td>
+              <td><span class="code-tag">IO 14, 13, 12, 15, 0, 27</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+
+    <!-- PROTOKOL LORA & STATUS PENGEMBANGAN -->
+    <div class="grid-2">
+      
+      <!-- PROTOKOL LORA -->
+      <div class="card">
+        <h2 class="card-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"/></svg>
+          Protokol Komunikasi LoRa
+        </h2>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem;">Frekuensi: <strong>922 MHz</strong> (Standar AS923 Indonesia) | Format Teks Hemat Daya:</p>
+        
+        <div style="margin-bottom: 1rem;">
+          <div style="font-size: 0.8rem; font-weight: 700; color: #93c5fd; text-transform: uppercase;">Perintah Dari Laptop:</div>
+          <div style="font-family: var(--mono); background: #070c14; padding: 0.5rem 0.75rem; border-radius: 8px; margin-top: 0.35rem; font-size: 0.85rem; color: #38bdf8;">
+            CMD:GO:A,C &nbsp;<span style="color: #64748b;">// Mulai misi ke A lalu ke C</span><br>
+            CMD:STOP &nbsp;&nbsp;&nbsp;<span style="color: #64748b;">// Rem darurat E-Stop</span><br>
+            CMD:HOME &nbsp;&nbsp;&nbsp;<span style="color: #64748b;">// Pulang langsung ke START</span>
+          </div>
+        </div>
+
+        <div>
+          <div style="font-size: 0.8rem; font-weight: 700; color: #34d399; text-transform: uppercase;">Laporan Telemetri Dari Robot:</div>
+          <div style="font-family: var(--mono); background: #070c14; padding: 0.5rem 0.75rem; border-radius: 8px; margin-top: 0.35rem; font-size: 0.85rem; color: #4ade80;">
+            STAT:ARRIVED:A &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: #64748b;">// Tiba di Stasiun A</span><br>
+            STAT:ARRIVED:C &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: #64748b;">// Tiba di Stasiun C</span><br>
+            STAT:OBSTACLE_HOLD &nbsp;&nbsp;<span style="color: #64748b;">// Rem darurat (ada rintangan)</span><br>
+            STAT:MISSION_COMPLETE <span style="color: #64748b;">// Parkir di START</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- STATUS & NEXT STEPS -->
+      <div class="card">
+        <h2 class="card-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 14 14"/></svg>
+          Status & Rencana Pengerjaan
+        </h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Tahapan</th>
+              <th>Status</th>
+              <th>Keterangan</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Tahap 1</strong>: Kalibrasi Dasar</td>
+              <td><span class="status-badge status-success">SELESAI</span></td>
+              <td>Line Follower PD kurva halus, Trim lurus, Sensor Blind Zone</td>
+            </tr>
+            <tr>
+              <td><strong>Tahap 2</strong>: Belok Simpang 90&deg;</td>
+              <td><span class="status-badge status-pending">BERIKUTNYA</span></td>
+              <td>Pengenal Node melintang & putaran poros presisi</td>
+            </tr>
+            <tr>
+              <td><strong>Tahap 3</strong>: Jarak Stasiun Encoder</td>
+              <td><span class="status-badge status-pending">BERIKUTNYA</span></td>
+              <td>Hitung pulsa jarak berhenti tepat di titik A, B, C, D, E</td>
+            </tr>
+            <tr>
+              <td><strong>Tahap 4</strong>: Firmware LoRa Tx/Rx</td>
+              <td><span class="status-badge status-pending">BERIKUTNYA</span></td>
+              <td>Sketch pengirim untuk Laptop & penerima di AGV</td>
+            </tr>
+            <tr>
+              <td><strong>Tahap 5</strong>: Uji Penuh Arena 3&times;3m</td>
+              <td><span class="status-badge status-pending">AKHIR</span></td>
+              <td>Eksekusi misi otonom menyeluruh</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+
+    <!-- FOOTER -->
+    <footer>
+      Dokumen ini siap dipresentasikan kepada klien atau dicetak sebagai panduan perakitan teknis.<br>
+      Disimpan di direktori utama: <span class="code-tag">SKEMA_AGV_ROBOT.md</span> dan <span class="code-tag">SKEMA_AGV_ROBOT.html</span>
+    </footer>
+
+  </div>
+
+</body>
+</html>

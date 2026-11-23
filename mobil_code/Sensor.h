@@ -1,0 +1,223 @@
+#pragma once
+#include <Arduino.h>
+#include "Config.h"
+
+// ====================================================================
+// MODUL SENSOR (LINE FOLLOWER 5-CH, ULTRASONIK HC-SR04, ENCODER)
+// File: Sensor.h
+// ====================================================================
+
+// --- STRUKTUR DATA PEMBACAAN GARIS ---
+struct LineData {
+  int b1; // Kiri Luar (S1)
+  int b2; // Kiri Tengah (S2)
+  int b3; // Tengah (S3)
+  int b4; // Kanan Tengah (S4)
+  int b5; // Kanan Luar (S5)
+  int totalAktif; // Total sensor yang melihat garis hitam
+  float error;    // Error posisi (-2.0 s/d +2.0)
+
+  // Status Karakteristik Pola Jalur Sesuai Real Case
+  bool isLurus;          // Pola [0 1 1 1 0] atau garis tengah tepat
+  bool isTikunganKanan;  // Sensor kanan aktif tebal (S5=1, S4=1, S1=0)
+  bool isTikunganKiri;   // Sensor kiri aktif tebal (S1=1, S2=1, S5=0)
+  bool isPerempatan;     // Sensor terluar kanan dan kiri aktif bersamaan (S1=1, S5=1)
+  bool isGarisHilang;    // Semua sensor membaca lantai putih/kardus [0 0 0 0 0]
+
+  // Status Khusus Kelurusan Selesai Belok Kiri 90°:
+  // Sesuai instruksi: sensor tengah (S3) DAN kanan sebelahnya sebelum akhir (S4)
+  // Kondisi AND murni tanpa OR: [0 0 1 1 0]
+  // Garis datang dari kanan menyapu S5 -> S4 -> S3. Begitu S3 & S4 aktif bersamaan (~85°),
+  // robot langsung terkunci & rem aktif lawan arah sehingga inersia putar berhenti pas di 90° simetris,
+  // TIDAK PERNAH over-rotate menyentuh S2 (< 90° anti menjorok ke kiri).
+  bool isLurusBelokKiri() const {
+    if (b1 != 0 || b5 != 0 || b2 != 0) return false;
+    return (b3 == 1 && b4 == 1);
+  }
+  // Status Khusus Kelurusan Selesai Belok Kanan 90°:
+  // Tetap deteksi 3 sensor dari tengah ke kanan (S3, S4, serta kombinasi tengah)
+  // b1 dan b5 HARUS 0 (tidak berada di area persimpangan tebal).
+  // Sensor tengah (S3) wajib aktif mengunci garis cabang timur: [0 0 1 1 0], [0 1 1 1 0], atau [0 0 1 0 0]
+  bool isLurusBelokKanan() const {
+    if (b1 != 0 || b5 != 0) return false;
+    bool pola00110 = (b2 == 0 && b3 == 1 && b4 == 1);
+    bool pola01110 = (b2 == 1 && b3 == 1 && b4 == 1);
+    bool pola00100 = (b2 == 0 && b3 == 1 && b4 == 0);
+    return (pola00110 || pola01110 || pola00100);
+  }
+
+  // Simpang Gelap Semua [1 1 1 1 1] (Simpang 3 Melintang atau Simpang 4)
+  bool isGelapSemua() const {
+    return (totalAktif >= AMBANG_SIMPANG_PENUH);
+  }
+
+  // Deteksi Cabang Simpang Kanan (S5 dan S4 aktif)
+  bool isCabangKanan() const {
+    return (b5 == 1 && b4 == 1);
+  }
+
+  // Deteksi Simpang Cabang Kanan Topologis Sejati:
+  // Karakteristik T-Junction Cabang Kanan:
+  // Jalur lurus tetap ada di depan (S3 = 1), DAN cabang kanan muncul (S4 = 1 dan S5 = 1)!
+  // Total sensor aktif >= 3. Pola miring [0 0 0 1 1] di mana S3=0 akan DITOLAK MENTAH-MENTAH!
+  bool isCabangKananTopologis() const {
+    return (b3 == 1 && b4 == 1 && b5 == 1 && totalAktif >= 3);
+  }
+};
+
+// Variabel Global Sensor
+static volatile long encoderTicks = 0;
+static float jarakValidTerakhir   = 999.0;
+static float jarakSaatIni         = 999.0;
+static bool statusHalangan        = false;
+static unsigned long lastSonarTime = 0;
+static int arahGarisTerakhir      = 0; // -1 = Kiri, 0 = Lurus/Tengah, +1 = Kanan
+
+// Interrupt ISR Encoder Roda Kiri (Aman dari conflict IRAM)
+inline void bacaEncoderISR() {
+  int valB = digitalRead(pinEncoderB);
+  if (valB == HIGH) {
+    encoderTicks++;
+  } else {
+    encoderTicks--;
+  }
+}
+
+// Inisialisasi Seluruh Sensor
+inline void initSensors() {
+  // Pin Encoder
+  pinMode(pinEncoderA, INPUT_PULLUP);
+  pinMode(pinEncoderB, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(pinEncoderA), bacaEncoderISR, RISING);
+
+  // Pin Line Follower 5-Ch
+  pinMode(pinLine1, INPUT);
+  pinMode(pinLine2, INPUT);
+  pinMode(pinLine3, INPUT);
+  pinMode(pinLine4, INPUT);
+  pinMode(pinLine5, INPUT);
+
+  // Pin Ultrasonik HC-SR04 (Hanya diaktifkan jika GUNAKAN_SENSOR_JARAK = true)
+  if (GUNAKAN_SENSOR_JARAK && pinTrig >= 0 && pinEcho >= 0) {
+    pinMode(pinTrig, OUTPUT);
+    pinMode(pinEcho, INPUT);
+    digitalWrite(pinTrig, LOW);
+  }
+}
+
+// Pembacaan 5 Sensor Garis (0 = Garis Hitam Aktif, 1 = Kardus Terang)
+inline LineData bacaSensorGaris() {
+  LineData data;
+
+  // Baca status mentah (1 = Hitam, 0 = Terang/Putih)
+  int raw1 = (digitalRead(pinLine1) == 1) ? 1 : 0;
+  int raw2 = (digitalRead(pinLine2) == 1) ? 1 : 0;
+  int raw3 = (digitalRead(pinLine3) == 1) ? 1 : 0;
+  int raw4 = (digitalRead(pinLine4) == 1) ? 1 : 0;
+  int raw5 = (digitalRead(pinLine5) == 1) ? 1 : 0;
+
+  // Opsi Pembalikan Urutan jika Kabel S1 & S5 Tertukar
+  if (!REVERSE_SENSOR_ORDER) {
+    data.b1 = raw1; // S1 (Kiri Luar)
+    data.b2 = raw2; // S2 (Kiri Tengah)
+    data.b3 = raw3; // S3 (Tengah)
+    data.b4 = raw4; // S4 (Kanan Tengah)
+    data.b5 = raw5; // S5 (Kanan Luar)
+  } else {
+    data.b1 = raw5; // S5 jadi Kiri Luar
+    data.b2 = raw4; // S4 jadi Kiri Tengah
+    data.b3 = raw3; // S3 tetap Tengah
+    data.b4 = raw2; // S2 jadi Kanan Tengah
+    data.b5 = raw1; // S1 jadi Kanan Luar
+  }
+
+  data.totalAktif = data.b1 + data.b2 + data.b3 + data.b4 + data.b5;
+
+  // 1. EVALUASI POLA KHUSUS SESUAI REAL CASE DI LAPANGAN
+  // Saat lurus di atas lakban lebar: S2, S3, S4 aktif hitam [0 1 1 1 0]
+  // Atau garis tipis tepat di tengah: S3 aktif, S2 dan S4 tidak aktif [0 0 1 0 0]
+  // CATATAN PENTING: Pola [0 0 1 1 0] atau [0 1 1 0 0] BUKAN lurus tengah, tapi miring/offset!
+  data.isLurus = (data.b1 == 0 && data.b5 == 0) &&
+                 ((data.b2 == 1 && data.b3 == 1 && data.b4 == 1) ||
+                  (data.b2 == 0 && data.b3 == 1 && data.b4 == 0));
+
+  // Tikungan 90 Derajat ke KANAN: Sensor kanan luar & tengah aktif tebal, sensor kiri kosong
+  data.isTikunganKanan = (data.b5 == 1 && (data.b4 == 1 || data.b3 == 1) && data.b1 == 0);
+
+  // Tikungan 90 Derajat ke KIRI: Sensor kiri luar & tengah aktif tebal, sensor kanan kosong
+  data.isTikunganKiri  = (data.b1 == 1 && (data.b2 == 1 || data.b3 == 1) && data.b5 == 0);
+
+  // Perempatan: Kedua sensor luar membaca garis melintang bersamaan
+  data.isPerempatan    = (data.b1 == 1 && data.b5 == 1);
+
+  // Garis Hilang
+  data.isGarisHilang   = (data.totalAktif == 0);
+
+  // 2. HITUNG KOREKSI ERROR POSISI PUSAT MASSA
+  if (data.totalAktif > 0) {
+    float bobot = (data.b1 * -2.0) + (data.b2 * -1.0) + (data.b3 * 0.0) + (data.b4 * 1.0) + (data.b5 * 2.0);
+    data.error = bobot / (float)data.totalAktif;
+
+    // Catat arah terakhir jika robot keluar jalur
+    if (data.error > 0.3) {
+      arahGarisTerakhir = +1; // Terakhir cenderung di kanan
+    } else if (data.error < -0.3) {
+      arahGarisTerakhir = -1; // Terakhir cenderung di kiri
+    } else {
+      arahGarisTerakhir = 0;  // Tepat di tengah
+    }
+  } else {
+    // Garis hilang: Jangan paksa 0.0 agar tidak melaju buta lurus ke kardus kosong!
+    data.error = 0.0;
+  }
+
+  return data;
+}
+
+// Pembacaan Sensor Jarak HC-SR04 (Aman dari Titik Buta)
+inline float bacaJarakUltrasonik() {
+  if (!GUNAKAN_SENSOR_JARAK || pinTrig < 0 || pinEcho < 0) {
+    return 999.0; // Sensor dinonaktifkan: jalan selalu dianggap bebas/kosong
+  }
+
+  digitalWrite(pinTrig, LOW);
+  delayMicroseconds(2);
+  digitalWrite(pinTrig, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(pinTrig, LOW);
+
+  long durasi = pulseIn(pinEcho, HIGH, 6000); // Timeout 6ms (~1 meter, super responsif tanpa lag)
+
+  if (durasi == 0) {
+    return 999.0; // Jalan kosong di depan (timeout tidak ada halangan dekat)
+  }
+
+  float cm = durasi * 0.0343 / 2.0;
+  if (cm < 3.0) {
+    cm = 1.0; // Titik buta di bawah 3 cm
+  }
+
+  jarakValidTerakhir = cm;
+  return cm;
+}
+
+// Update Radar Keamanan (Paced 60ms)
+inline void updateRadarKeamanan() {
+  if (!GUNAKAN_SENSOR_JARAK) {
+    statusHalangan = false; // Selalu bebas halangan (mobil tidak akan berhenti)
+    jarakSaatIni   = 999.0;
+    return;
+  }
+
+  if (millis() - lastSonarTime >= 60) {
+    lastSonarTime = millis();
+    jarakSaatIni = bacaJarakUltrasonik();
+
+    // Histeresis Keamanan Anti-Tabrak
+    if (jarakSaatIni > 0 && jarakSaatIni <= JARAK_STOP_CM) {
+      statusHalangan = true; // Rem Darurat
+    } else if (jarakSaatIni > JARAK_LEPAS_CM) {
+      statusHalangan = false; // Jalan Kembali
+    }
+  }
+}
