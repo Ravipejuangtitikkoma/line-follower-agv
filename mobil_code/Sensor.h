@@ -1,5 +1,7 @@
 #pragma once
 #include <Arduino.h>
+#include <driver/gpio.h>
+#include <esp_timer.h>
 #include "Config.h"
 
 // ====================================================================
@@ -66,8 +68,12 @@ struct LineData {
 };
 
 // Variabel Global Sensor
-static volatile long encoderTicks = 0;
-static portMUX_TYPE encoderMux    = portMUX_INITIALIZER_UNLOCKED;
+static volatile long          encoderTicks  = 0;
+static volatile unsigned long encoderPulseA = 0;
+static volatile unsigned long encoderPulseB = 0;
+static volatile int64_t       lastIsrAUs    = 0;
+static volatile int64_t       lastIsrBUs    = 0;
+static portMUX_TYPE           encoderMux    = portMUX_INITIALIZER_UNLOCKED;
 static float jarakValidTerakhir   = 999.0;
 static float jarakSaatIni         = 999.0;
 static bool statusHalangan        = false;
@@ -82,11 +88,16 @@ inline void resetWingTimestamps() {
   lastRightWingTime = 0;
 }
 
-// Interrupt ISR Encoder Roda Kiri (IRAM_ATTR + critical section aman untuk ESP32)
-static void IRAM_ATTR bacaEncoderISR() {
-  int valB = digitalRead(pinEncoderB);
+// Interrupt ISR Fase A (GPIO 32): hitung pulsa tak-bertanda + quadrature arah
+static void IRAM_ATTR bacaEncoderA_ISR() {
+  int64_t nowUs = esp_timer_get_time();
+  if (nowUs - lastIsrAUs < 100) return; // Filter EMI/bounce < 100us (aman s/d 10 kHz)
+  lastIsrAUs = nowUs;
+
+  int valB = gpio_get_level((gpio_num_t)pinEncoderB);
   portENTER_CRITICAL_ISR(&encoderMux);
-  if (valB == HIGH) {
+  encoderPulseA++;
+  if (valB == 1) {
     encoderTicks++;
   } else {
     encoderTicks--;
@@ -94,19 +105,80 @@ static void IRAM_ATTR bacaEncoderISR() {
   portEXIT_CRITICAL_ISR(&encoderMux);
 }
 
-// Pembacaan pulsa encoder secara atomik (thread/ISR-safe di ESP32)
-inline long bacaEncoderTicks() {
-  portENTER_CRITICAL(&encoderMux);
-  long ticks = encoderTicks;
-  portEXIT_CRITICAL(&encoderMux);
-  return ticks;
+// Interrupt ISR Fase B (GPIO 33): cadangan otomatis bila kabel Fase A lepas / tertukar
+static void IRAM_ATTR bacaEncoderB_ISR() {
+  int64_t nowUs = esp_timer_get_time();
+  if (nowUs - lastIsrBUs < 100) return;
+  lastIsrBUs = nowUs;
+
+  portENTER_CRITICAL_ISR(&encoderMux);
+  encoderPulseB++;
+  portEXIT_CRITICAL_ISR(&encoderMux);
 }
 
-// Reset pulsa encoder global ke 0
+struct EncoderSnapshot {
+  long          quadTicks;
+  unsigned long pulseA;
+  unsigned long pulseB;
+};
+
+// Ambil snapshot seluruh counter encoder secara atomik (thread/ISR-safe)
+inline EncoderSnapshot bacaEncoderSnapshot() {
+  EncoderSnapshot snap;
+  portENTER_CRITICAL(&encoderMux);
+  snap.quadTicks = encoderTicks;
+  snap.pulseA    = encoderPulseA;
+  snap.pulseB    = encoderPulseB;
+  portEXIT_CRITICAL(&encoderMux);
+  return snap;
+}
+
+// Pembacaan pulsa encoder quadrature secara atomik
+inline long bacaEncoderTicks() {
+  return bacaEncoderSnapshot().quadTicks;
+}
+
+// Reset seluruh pulsa encoder global ke 0
 inline void resetEncoderTicks() {
   portENTER_CRITICAL(&encoderMux);
-  encoderTicks = 0;
+  encoderTicks  = 0;
+  encoderPulseA = 0;
+  encoderPulseB = 0;
+  lastIsrAUs    = 0;
+  lastIsrBUs    = 0;
   portEXIT_CRITICAL(&encoderMux);
+}
+
+// Hitung pulsa efektif gerak maju dalam 1 fase:
+// - Jika quadrature sehat (|dQuad| >= 70% dA) -> pakai |dQuad|
+// - Jika Fase B noisy/floating sehingga ++/-- saling menghapus -> otomatis pakai dA murni
+// - Jika Fase A mati (dA == 0) namun Fase B aktif -> otomatis pakai dB
+inline unsigned long hitungPulsaEfektif(const EncoderSnapshot& awal,
+                                        const EncoderSnapshot& kini,
+                                        bool& pakaiPulseAOnly,
+                                        bool& pakaiPulseBCadangan) {
+  long          dQuad = kini.quadTicks - awal.quadTicks;
+  unsigned long dA    = kini.pulseA - awal.pulseA;
+  unsigned long dB    = kini.pulseB - awal.pulseB;
+  unsigned long absQ  = (unsigned long)labs(dQuad);
+
+  pakaiPulseAOnly     = false;
+  pakaiPulseBCadangan = false;
+
+  if (dA > 0) {
+    if (absQ * 10UL >= dA * 7UL) {
+      return absQ;
+    }
+    pakaiPulseAOnly = true;
+    return dA;
+  }
+
+  if (dB > 0) {
+    pakaiPulseBCadangan = true;
+    return dB;
+  }
+
+  return 0;
 }
 
 // Konversi selisih pulsa encoder (deltaTicks) ke jarak tempuh dalam cm.
@@ -127,7 +199,8 @@ inline void initSensors() {
   // Pin Encoder
   pinMode(pinEncoderA, INPUT_PULLUP);
   pinMode(pinEncoderB, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(pinEncoderA), bacaEncoderISR, RISING);
+  attachInterrupt(digitalPinToInterrupt(pinEncoderA), bacaEncoderA_ISR, RISING);
+  attachInterrupt(digitalPinToInterrupt(pinEncoderB), bacaEncoderB_ISR, RISING);
 
   // Pin Line Follower 5-Ch
   pinMode(pinLine1, INPUT);

@@ -39,15 +39,22 @@ static float      errSebelumnyaPD       = 0.0f;
 static bool       sudahLepasGarisLama   = false;
 static bool       sudahAutoAlignStart   = false;
 static int        konfirmasiCabangKanan = 0;
-static long       encoderTicksAwalFase  = 0;
-static unsigned long lastWarnEncoderMs  = 0;
+static EncoderSnapshot encoderAwalFase     = {0, 0, 0};
+static bool            sudahLogModeEncoder = false;
+static unsigned long   lastWarnEncoderMs   = 0;
 
 inline long getDeltaTicksFase() {
-  return bacaEncoderTicks() - encoderTicksAwalFase;
+  return bacaEncoderSnapshot().quadTicks - encoderAwalFase.quadTicks;
+}
+
+inline unsigned long getPulsaEfektifFase(bool& pakaiAOnly, bool& pakaiBCadangan) {
+  return hitungPulsaEfektif(encoderAwalFase, bacaEncoderSnapshot(), pakaiAOnly, pakaiBCadangan);
 }
 
 inline float getJarakFaseCm() {
-  return ticksKeCm(getDeltaTicksFase());
+  bool aOnly = false, bCad = false;
+  unsigned long pulsa = getPulsaEfektifFase(aOnly, bCad);
+  return ticksKeCm((long)pulsa);
 }
 
 // Helper nama fase untuk log & telemetri
@@ -75,9 +82,10 @@ inline void gantiFase(StepPhase faseBaru, const char* alasan) {
 
   if (faseBaru == PHASE_FOLLOW) {
     resetWingTimestamps();
-    errSebelumnyaPD      = 0.0f;
-    encoderTicksAwalFase = bacaEncoderTicks();
-    lastWarnEncoderMs    = millis();
+    errSebelumnyaPD     = 0.0f;
+    encoderAwalFase     = bacaEncoderSnapshot();
+    sudahLogModeEncoder = false;
+    lastWarnEncoderMs   = millis();
   }
 
   const char* label = (stepIdxSaatIni >= 0 && stepIdxSaatIni < JUMLAH_STEP_RUTE_REAL)
@@ -239,24 +247,106 @@ inline bool evaluasiTrigger(const PlanStep& step, const LineData& line, unsigned
 
     case TRIG_ENCODER_JARAK: {
       if (step.targetJarakCm <= 0.0f) return false;
-      long deltaTicks = getDeltaTicksFase();
-      float jarakCm   = ticksKeCm(deltaTicks);
 
-      // Peringatan jika mobil sudah berjalan > 1.5 detik namun encoder belum membaca pulsa
-      if (durasiDiFase >= 1500 && deltaTicks == 0 && (millis() - lastWarnEncoderMs >= 1000)) {
-        lastWarnEncoderMs = millis();
-        Serial.println("[PERINGATAN ENCODER] Pulsa masih 0! Cek kabel encoder roda kiri (GPIO 32/33) & VCC sensor.");
+      EncoderSnapshot kini = bacaEncoderSnapshot();
+      bool pakaiAOnly = false;
+      bool pakaiBCad  = false;
+      unsigned long pulsa = hitungPulsaEfektif(encoderAwalFase, kini, pakaiAOnly, pakaiBCad);
+      long dQuad          = kini.quadTicks - encoderAwalFase.quadTicks;
+      unsigned long dA    = kini.pulseA - encoderAwalFase.pulseA;
+      unsigned long dB    = kini.pulseB - encoderAwalFase.pulseB;
+      float jarakCm       = ticksKeCm((long)pulsa);
+
+      if (!sudahLogModeEncoder && (pakaiAOnly || pakaiBCad)) {
+        sudahLogModeEncoder = true;
+        if (pakaiAOnly) {
+          Serial.println("[INFO ENCODER] Fase B tidak sinkron/noisy -> otomatis pakai pulsa murni Fase A (anti-batal).");
+        } else if (pakaiBCad) {
+          Serial.println("[INFO ENCODER] Fase A (GPIO 32) = 0 -> otomatis pakai cadangan Fase B (GPIO 33).");
+        }
       }
 
-      if (jarakCm >= step.targetJarakCm) {
+      // 1. TRIGGER UTAMA: Target jarak encoder tercapai
+      if (pulsa > 0 && jarakCm >= step.targetJarakCm) {
         Serial.print("\n>>> [ENCODER TARGET TERCAPAI] Jarak: ");
         Serial.print(jarakCm, 1);
         Serial.print(" / ");
         Serial.print(step.targetJarakCm, 1);
-        Serial.print(" cm | Delta Ticks: ");
-        Serial.println(deltaTicks);
+        Serial.print(" cm | Pulsa: ");
+        Serial.print(pulsa);
+        Serial.print(" (Q:"); Serial.print(dQuad);
+        Serial.print(" A:"); Serial.print(dA);
+        Serial.print(" B:"); Serial.print(dB);
+        Serial.println(")");
         return true;
       }
+
+      // 2. FALLBACK OTOMATIS: Bila encoder belum terbaca (0 pulsa) setelah 600ms berjalan
+      if (pulsa == 0 && durasiDiFase >= WAKTU_DETEKSI_ENCODER_MATI_MS) {
+        float jarakWaktuCm = ((float)durasiDiFase / 1000.0f) * KECEPATAN_ESTIMASI_CM_PER_S;
+        if (millis() - lastWarnEncoderMs >= 1000) {
+          lastWarnEncoderMs = millis();
+          Serial.print("[PERINGATAN ENCODER] Pulsa masih 0 (PinA=");
+          Serial.print(digitalRead(pinEncoderA));
+          Serial.print(" PinB=");
+          Serial.print(digitalRead(pinEncoderB));
+          Serial.print(")! Fallback estimasi waktu: ");
+          Serial.print(jarakWaktuCm, 1);
+          Serial.print("/");
+          Serial.print(step.targetJarakCm, 1);
+          Serial.println(" cm");
+        }
+        if (GUNAKAN_FALLBACK_WAKTU_ENCODER && jarakWaktuCm >= step.targetJarakCm) {
+          Serial.print("\n>>> [FALLBACK WAKTU TERCAPAI] Encoder 0 pulsa -> stop di estimasi ");
+          Serial.print(jarakWaktuCm, 1);
+          Serial.print(" cm (");
+          Serial.print(durasiDiFase);
+          Serial.println(" ms). Cek kabel/daya encoder GPIO 32 & 33!");
+          return true;
+        }
+      }
+
+      // 3. PENGAMAN KERAS SIMPANG (khusus CHECKPOINT_A agar tidak bablas melewati N6)
+      if (step.stopJikaSimpang && durasiDiFase >= LOCKOUT_PENGAMAN_N6_MS &&
+          (line.isGelapSemua() || line.isPerempatan)) {
+        Serial.print("\n>>> [PENGAMAN SIMPANG N6] Robot menyentuh N6 sebelum target encoder! Pulsa: ");
+        Serial.print(pulsa);
+        Serial.print(" (Q:"); Serial.print(dQuad);
+        Serial.print(" A:"); Serial.print(dA);
+        Serial.print(" B:"); Serial.print(dB);
+        Serial.print(") | Jarak terhitung: ");
+        Serial.print(jarakCm, 1);
+        Serial.println(" cm -> Berhenti pengaman!");
+        if (pulsa > 0) {
+          float saranPPR = ((float)pulsa / 100.0f) * KELILING_RODA_CM;
+          Serial.print("    [KALIBRASI] Jika N2->N6 = 100 cm, coba set ENCODER_TICKS_PER_PUTARAN ~= ");
+          Serial.println(saranPPR, 1);
+        }
+        return true;
+      }
+
+      // 4. PENGAMAN TIMEOUT MAKSIMAL (bila PPR motor asli lebih kecil dari 330 sehingga hitungan terlalu rendah)
+      if (step.maxDurasiMs > 0 && durasiDiFase >= (unsigned long)step.maxDurasiMs) {
+        Serial.print("\n>>> [TIMEOUT ENCODER] Durasi ");
+        Serial.print(durasiDiFase);
+        Serial.print(" ms tercapai (Jarak terhitung: ");
+        Serial.print(jarakCm, 1);
+        Serial.print("/");
+        Serial.print(step.targetJarakCm, 1);
+        Serial.print(" cm | Pulsa: ");
+        Serial.print(pulsa);
+        Serial.print(" Q:"); Serial.print(dQuad);
+        Serial.print(" A:"); Serial.print(dA);
+        Serial.print(" B:"); Serial.print(dB);
+        Serial.println(") -> Berhenti pengaman!");
+        if (pulsa > 0) {
+          float saranPPR = ((float)pulsa * KELILING_RODA_CM) / step.targetJarakCm;
+          Serial.print("    [KALIBRASI] Coba sesuaikan ENCODER_TICKS_PER_PUTARAN di Config.h ke ~= ");
+          Serial.println(saranPPR, 1);
+        }
+        return true;
+      }
+
       return false;
     }
 
@@ -527,7 +617,8 @@ inline void initNavigationFSM() {
   konfirmasiCabangKanan = 0;
   errSebelumnyaPD       = 0.0f;
   resetEncoderTicks();
-  encoderTicksAwalFase  = 0;
+  encoderAwalFase       = {0, 0, 0};
+  sudahLogModeEncoder   = false;
   lastWarnEncoderMs     = millis();
   resetWingTimestamps();
   Serial.println("[PLAN ENGINE] Rute Diinisialisasi: START -> N0(Kiri) -> N2(Kanan) -> A(Encoder 50cm, 3s) -> C(Encoder 200cm, 3s) -> Pulang.");
@@ -576,23 +667,30 @@ inline void prosesPerintah(String cmd) {
   }
   else if (cmd == "RESET_ENC") {
     resetEncoderTicks();
-    encoderTicksAwalFase = 0;
+    encoderAwalFase     = {0, 0, 0};
+    sudahLogModeEncoder = false;
     Serial.println(">>> [RESET_ENC] Pulsa encoder roda kiri di-nolkan.");
   }
   else if (cmd == "TEST_ENCODER") {
     statusMisiSaatIni = MISI_STANDBY;
     berhentiTotal();
     resetEncoderTicks();
-    encoderTicksAwalFase = 0;
+    encoderAwalFase     = {0, 0, 0};
+    sudahLogModeEncoder = false;
     Serial.println("\n>>> [KALIBRASI ENCODER RODA KIRI (5 DETIK)]");
     Serial.println("Putar roda kiri 1 putaran penuh atau dorong robot 50 cm untuk cek nilai ticks...");
     for (int i = 0; i < 20; i++) {
       delay(250);
-      long t = bacaEncoderTicks();
-      Serial.print("  Encoder Ticks: ");
-      Serial.print(t);
+      EncoderSnapshot snap = bacaEncoderSnapshot();
+      bool pakaiAOnly = false, pakaiBCad = false;
+      unsigned long ef = hitungPulsaEfektif(encoderAwalFase, snap, pakaiAOnly, pakaiBCad);
+      Serial.print("  PinA="); Serial.print(digitalRead(pinEncoderA));
+      Serial.print(" PinB="); Serial.print(digitalRead(pinEncoderB));
+      Serial.print(" | Quad:"); Serial.print(snap.quadTicks);
+      Serial.print(" A:"); Serial.print(snap.pulseA);
+      Serial.print(" B:"); Serial.print(snap.pulseB);
       Serial.print(" | Estimasi Jarak: ");
-      Serial.print(ticksKeCm(t), 2);
+      Serial.print(ticksKeCm((long)ef), 2);
       Serial.println(" cm");
     }
     Serial.println(">>> [SELESAI] Sesuaikan ENCODER_TICKS_PER_PUTARAN di Config.h bila perlu.\n");
@@ -614,12 +712,25 @@ inline void prosesPerintah(String cmd) {
     Serial.print(label);
     Serial.print(") | Fase: ");
     Serial.println(namaFase(faseSaatIni));
-    Serial.print("Encoder Total: ");
-    Serial.print(bacaEncoderTicks());
-    Serial.print(" ticks | Delta Fase: ");
-    Serial.print(getDeltaTicksFase());
-    Serial.print(" ticks | Jarak Fase: ");
-    Serial.print(getJarakFaseCm(), 1);
+    EncoderSnapshot kini = bacaEncoderSnapshot();
+    bool pakaiAOnly = false, pakaiBCad = false;
+    unsigned long pulsa = hitungPulsaEfektif(encoderAwalFase, kini, pakaiAOnly, pakaiBCad);
+    long dQuad          = kini.quadTicks - encoderAwalFase.quadTicks;
+    unsigned long dA    = kini.pulseA - encoderAwalFase.pulseA;
+    unsigned long dB    = kini.pulseB - encoderAwalFase.pulseB;
+    Serial.print("Encoder Total Q:");
+    Serial.print(kini.quadTicks);
+    Serial.print(" A:");
+    Serial.print(kini.pulseA);
+    Serial.print(" B:");
+    Serial.print(kini.pulseB);
+    Serial.print(" | Fase Efektif: ");
+    Serial.print(pulsa);
+    Serial.print(" (dQ:"); Serial.print(dQuad);
+    Serial.print(" dA:"); Serial.print(dA);
+    Serial.print(" dB:"); Serial.print(dB);
+    Serial.print(") -> ");
+    Serial.print(ticksKeCm((long)pulsa), 1);
     Serial.print(" cm");
     if (stepIdxSaatIni >= 0 && stepIdxSaatIni < JUMLAH_STEP_RUTE_REAL &&
         RUTE_REAL_PP[stepIdxSaatIni].trigger == TRIG_ENCODER_JARAK) {
@@ -686,17 +797,35 @@ inline void tampilkanTelemetriFSM(const LineData& line) {
 
   if (stepIdxSaatIni >= 0 && stepIdxSaatIni < JUMLAH_STEP_RUTE_REAL &&
       RUTE_REAL_PP[stepIdxSaatIni].trigger == TRIG_ENCODER_JARAK) {
+    EncoderSnapshot kini = bacaEncoderSnapshot();
+    bool pakaiAOnly = false, pakaiBCad = false;
+    unsigned long pulsa = hitungPulsaEfektif(encoderAwalFase, kini, pakaiAOnly, pakaiBCad);
+    long dQuad          = kini.quadTicks - encoderAwalFase.quadTicks;
+    unsigned long dA    = kini.pulseA - encoderAwalFase.pulseA;
+    unsigned long dB    = kini.pulseB - encoderAwalFase.pulseB;
     Serial.print(" | Enc: ");
-    Serial.print(getDeltaTicksFase());
-    Serial.print("t (");
-    Serial.print(getJarakFaseCm(), 1);
+    Serial.print(pulsa);
+    Serial.print("t (Q:"); Serial.print(dQuad);
+    Serial.print(" A:"); Serial.print(dA);
+    Serial.print(" B:"); Serial.print(dB);
+    Serial.print(" | ");
+    Serial.print(ticksKeCm((long)pulsa), 1);
+    if (pulsa == 0 && GUNAKAN_FALLBACK_WAKTU_ENCODER && faseSaatIni == PHASE_FOLLOW) {
+      float estCm = ((float)(millis() - waktuMasukFase) / 1000.0f) * KECEPATAN_ESTIMASI_CM_PER_S;
+      Serial.print("cm/Fb:");
+      Serial.print(estCm, 1);
+    }
     Serial.print("/");
     Serial.print(RUTE_REAL_PP[stepIdxSaatIni].targetJarakCm, 0);
     Serial.print("cm)");
   } else {
-    Serial.print(" | Enc: ");
-    Serial.print(bacaEncoderTicks());
-    Serial.print("t");
+    EncoderSnapshot kini = bacaEncoderSnapshot();
+    Serial.print(" | Enc Q:");
+    Serial.print(kini.quadTicks);
+    Serial.print(" A:");
+    Serial.print(kini.pulseA);
+    Serial.print(" B:");
+    Serial.print(kini.pulseB);
   }
   Serial.println();
 }
@@ -734,7 +863,7 @@ inline void updateNavigationFSM(const LineData& line) {
         return;
       }
 
-      if (step.trigger == TRIG_ENCODER_JARAK && (line.isGelapSemua() || line.isPerempatan)) {
+      if (step.trigger == TRIG_ENCODER_JARAK && !step.stopJikaSimpang && (line.isGelapSemua() || line.isPerempatan)) {
         setKecepatanMotor(KEC_BASE + TRIM_KIRI, KEC_BASE + TRIM_KANAN);
       } else {
         jalankanTrackingPD(line, KEC_BASE);

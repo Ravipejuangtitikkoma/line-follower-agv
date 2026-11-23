@@ -162,6 +162,15 @@ const unsigned long DURASI_JEDA_TITIK_C_MS = 3000;  // Jeda bongkar muat 3 detik
 // true  = Setelah jeda 3 detik di Checkpoint C, robot otomatis U-Turn 180° & pulang ke START
 // false = Robot berhenti (STANDBY) di Checkpoint C menunggu perintah 'PULANG'
 const bool OTOMATIS_PULANG_SETELAH_C      = true;
+
+// Fallback & proteksi pengaman bila encoder tidak mengirim pulsa (0 ticks) atau PPR motor lebih kecil dari 330:
+// Kecepatan linear robot pada KEC_BASE = 58 dari rumus.md adalah ~20.8 cm/s
+const bool          GUNAKAN_FALLBACK_WAKTU_ENCODER = true;  // Otomatis pakai estimasi waktu jika pulsa encoder == 0
+const float         KECEPATAN_ESTIMASI_CM_PER_S    = 20.8f; // Estimasi kecepatan maju (cm/detik) pada KEC_BASE = 58
+const unsigned long WAKTU_DETEKSI_ENCODER_MATI_MS  = 600;   // Jika 600ms berjalan pulsa masih 0, aktifkan fallback waktu
+const unsigned long TIMEOUT_ENCODER_A_MS           = 3500;  // Batas waktu maksimal ruas N2 -> A (~73 cm) agar tidak bablas
+const unsigned long TIMEOUT_ENCODER_C_MS           = 12000; // Batas waktu maksimal ruas A -> C (~250 cm) agar tidak bablas
+const unsigned long LOCKOUT_PENGAMAN_N6_MS         = 600;   // Abaikan garis N2 selama 600ms awal sebelum pengaman simpang N6 aktif
  
 // ================= PENGAMAN KALIBRASI AWAL & SIMPANG KANAN =================
 const int WAKTU_AUTO_ALIGN_MAX_MS          = 250; // Waktu maksimal kalibrasi mikro posisi awal di tempat (ms)
