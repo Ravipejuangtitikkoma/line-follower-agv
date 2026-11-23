@@ -135,6 +135,7 @@ const int AMBANG_SIMPANG_PENUH       = 4;   // Minimal 4 dari 5 sensor membaca g
 // tetap dianggap perempatan sah (tahan posisi masuk miring, kebal S-bend >150ms)
 const unsigned long TOLERANSI_MIRING_SIMPANG_MS = 35;
 const int PERSISTENSI_CABANG_KANAN              = 2;
+const int PERSISTENSI_CABANG_KIRI               = 2;
 
 // ================= PARAMETER RUTE PETA RIIL (START -> A -> B) =================
 const unsigned long DURASI_MENGGELIR_KIRI_MS   = 0;    // 0ms: Putaran buta dihilangkan total sama seperti belok kanan agar tidak overshoot >90° ke kiri
@@ -171,6 +172,11 @@ const unsigned long WAKTU_DETEKSI_ENCODER_MATI_MS  = 600;   // Jika 600ms berjal
 const unsigned long TIMEOUT_ENCODER_A_MS           = 3500;  // Batas waktu maksimal ruas N2 -> A (~73 cm) agar tidak bablas
 const unsigned long TIMEOUT_ENCODER_C_MS           = 12000; // Batas waktu maksimal ruas A -> C (~250 cm) agar tidak bablas
 const unsigned long LOCKOUT_PENGAMAN_N6_MS         = 600;   // Abaikan garis N2 selama 600ms awal sebelum pengaman simpang N6 aktif
+
+// ================= PARAMETER MAPPING DINAMIS & FLASH ESP32 (NVS) =================
+const int   MAX_PLAN_STEPS          = 28;    // Kapasitas maksimal langkah rute aktif (aman 1 halaman NVS ESP32)
+const float OFFSET_CROSS_SIMPANG_CM = 9.0f;  // Kompensasi jarak maju ~450ms saat melintasi simpang lurus sebelum ukur 50cm ke stasiun
+const bool  AUTO_START_SAAT_NYALA   = true;  // true = otomatis jalan 2s setelah boot (bisa dibatalkan via Serial)
  
 // ================= PENGAMAN KALIBRASI AWAL & SIMPANG KANAN =================
 const int WAKTU_AUTO_ALIGN_MAX_MS          = 250; // Waktu maksimal kalibrasi mikro posisi awal di tempat (ms)
