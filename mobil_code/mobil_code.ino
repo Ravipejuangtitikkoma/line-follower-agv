@@ -6,8 +6,10 @@
 //   - Motor.h         : Penggerak Motor, Filter Akselerasi, & Soft-Start Ramp
 //   - Sensor.h        : Line Follower 5-Ch TCRT5000, Ultrasonik HC-SR04
 //   - NodeDetector.h  : Algoritma Deteksi Simpang & Kunci Garis Siku
-//   - RoutePlans.h    : Tabel Rute Deklaratif (Data-Driven Plan Engine)
-//   - NavigationFSM.h : Eksekutor 4-Fase Navigasi Peta Riil (START -> A -> B -> START)
+//   - RoutePlans.h    : Tabel Rute Dinamis (RAM) & Preset Default
+//   - GridGraph.h     : Graph Route Planner Arena 3m x 3m (Otomatis Stasiun A-E)
+//   - RouteStorage.h  : Penyimpanan Permanen Flash ESP32 (NVS Preferences)
+//   - NavigationFSM.h : Eksekutor 4-Fase Navigasi & Parser Perintah Serial/LoRa
 // ====================================================================
 
 #include <Arduino.h>
@@ -16,6 +18,8 @@
 #include "Sensor.h"
 #include "NodeDetector.h"
 #include "RoutePlans.h"
+#include "GridGraph.h"
+#include "RouteStorage.h"
 #include "NavigationFSM.h"
 
 // Variabel Pewaktu Telemetri
@@ -27,17 +31,23 @@ void setup() {
 
   Serial.println("\n=======================================================");
   Serial.println("   AGV ROBOT: HIERARCHICAL FINITE STATE MACHINE (HFSM) ");
+<<<<<<< HEAD
   Serial.println("   Misi: START -> N0 Kiri -> N2 Kanan -> Checkpoint A  ");
   Serial.println("         (50cm, 3s) -> N6 -> N10 -> Checkpoint C       ");
   Serial.println("         (40cm, 3s) -> U-Turn 180° -> Pulang ke START  ");
+=======
+  Serial.println("   Mapping Dinamis via Serial Monitor + Flash NVS      ");
+>>>>>>> 1868a04b114b68a11ba138ea28b8c4c4334c70be
   Serial.println("   Board: Mappi32 (ESP32)                              ");
   Serial.println("=======================================================");
 
-  // Inisialisasi Perangkat Keras
+  // Inisialisasi Perangkat Keras & Muat Mapping Tersimpan dari Flash
   initMotor();
   initSensors();
   resetNodeDetector();
+  muatMappingDariFlash();
   initNavigationFSM();
+  tampilkanTabelMapping();
 
   if (!GUNAKAN_SENSOR_JARAK) {
     Serial.println(F("[INFO] Sensor Jarak HC-SR04: DINONAKTIFKAN (Mobil jalan terus tanpa halangan)."));
@@ -49,6 +59,7 @@ void setup() {
     Serial.println(F("  -> Sebelum tes rute penuh, sangat disarankan jalankan 'KALIBRASI_50CM' atau 'SET_PPR <nilai>'!"));
   }
 
+<<<<<<< HEAD
   Serial.println("\n[PANDUAN OPERATOR SERIAL MONITOR / LORA]:");
   Serial.println("  Ketik 'START'             -> Mulai Misi Penuh (START -> A -> C -> START)");
   Serial.println("  Ketik 'LANJUT'            -> Bypass jeda 3 detik di Checkpoint A / C");
@@ -65,6 +76,25 @@ void setup() {
   Serial.println("  Ketik 'TEST_MUNDUR_KANAN' -> Diagnostik Driver Kanan Mundur (Pin 17 / LPWM)");
   Serial.println("\n[INFO] Mobil otomatis memulai Misi dalam 2 detik...\n");
   delay(2000);
+=======
+  cetakBantuanSerial();
+
+  if (runtimeAutoStart) {
+    Serial.println("\n[INFO] Robot otomatis mulai dalam 2 detik... (Ketik perintah di Serial untuk batal & konfigurasi)\n");
+    unsigned long tWait = millis();
+    while (millis() - tWait < 2000) {
+      if (Serial.available()) {
+        statusMisiSaatIni = MISI_STANDBY;
+        String cmd = Serial.readStringUntil('\n');
+        prosesPerintah(cmd);
+        break;
+      }
+      delay(10);
+    }
+  } else {
+    Serial.println("\n[INFO] Mode AUTOSTART = OFF (STANDBY). Ketik 'START' untuk mulai atau 'HELP' untuk panduan.\n");
+  }
+>>>>>>> 1868a04b114b68a11ba138ea28b8c4c4334c70be
 }
 
 void loop() {
@@ -98,7 +128,7 @@ void loop() {
   LineData line = bacaSensorGaris();
 
   // 5. EKSEKUSI DATA-DRIVEN PLAN ENGINE (HFSM)
-  // Menjalankan Level 1 (Misi Status) & Level 2 (Eksekutor 4-Fase atas RUTE_REAL_PP[]):
+  // Menjalankan Level 1 (Misi Status) & Level 2 (Eksekutor 4-Fase atas ruteAktif[]):
   //   - PHASE_FOLLOW -> PHASE_PRE_MOVE -> PHASE_PAUSE -> PHASE_ACTION
   updateNavigationFSM(line);
 
