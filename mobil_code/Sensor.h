@@ -2,6 +2,7 @@
 #include <Arduino.h>
 #include <driver/gpio.h>
 #include <esp_timer.h>
+#include <Preferences.h>
 #include "Config.h"
 
 // ====================================================================
@@ -37,15 +38,16 @@ struct LineData {
     return (b3 == 1 && b4 == 1);
   }
   // Status Khusus Kelurusan Selesai Belok Kanan 90°:
-  // Tetap deteksi 3 sensor dari tengah ke kanan (S3, S4, serta kombinasi tengah)
+  // Saat belok kanan (CW), garis cabang menyapu dari kanan ke kiri (S5 -> S4 -> S3 -> S2).
+  // Pola [0 0 1 1 0] ditolak karena tercapai lebih awal di sudut ~80°-85° sebelum bodi lurus.
   // b1 dan b5 HARUS 0 (tidak berada di area persimpangan tebal).
-  // Sensor tengah (S3) wajib aktif mengunci garis cabang timur: [0 0 1 1 0], [0 1 1 1 0], atau [0 0 1 0 0]
+  // Kunci garis cabang timur tepat 90° saat S3 aktif & sudah sejajar/melewati tengah: [0 1 1 1 0], [0 1 1 0 0], atau [0 0 1 0 0]
   bool isLurusBelokKanan() const {
     if (b1 != 0 || b5 != 0) return false;
-    bool pola00110 = (b2 == 0 && b3 == 1 && b4 == 1);
+    bool pola01100 = (b2 == 1 && b3 == 1 && b4 == 0);
     bool pola01110 = (b2 == 1 && b3 == 1 && b4 == 1);
     bool pola00100 = (b2 == 0 && b3 == 1 && b4 == 0);
-    return (pola00110 || pola01110 || pola00100);
+    return (pola01100 || pola01110 || pola00100);
   }
 
   // Simpang Gelap Semua [1 1 1 1 1] (Simpang 3 Melintang atau Simpang 4)
@@ -74,6 +76,8 @@ static volatile unsigned long encoderPulseB = 0;
 static volatile int64_t       lastIsrAUs    = 0;
 static volatile int64_t       lastIsrBUs    = 0;
 static portMUX_TYPE           encoderMux    = portMUX_INITIALIZER_UNLOCKED;
+static float encoderTicksPerPutaran         = ENCODER_TICKS_PER_PUTARAN;
+static bool  encoderSudahKalibrasiNVS       = false;
 static float jarakValidTerakhir   = 999.0;
 static float jarakSaatIni         = 999.0;
 static bool statusHalangan        = false;
@@ -184,14 +188,51 @@ inline unsigned long hitungPulsaEfektif(const EncoderSnapshot& awal,
 // Konversi selisih pulsa encoder (deltaTicks) ke jarak tempuh dalam cm.
 // Menggunakan labs() agar kebal terhadap perbedaan polaritas kabel Fase A/B saat roda maju.
 inline float ticksKeCm(long deltaTicks) {
-  if (ENCODER_TICKS_PER_PUTARAN <= 0.0f) return 0.0f;
-  return ((float)labs(deltaTicks) / ENCODER_TICKS_PER_PUTARAN) * KELILING_RODA_CM;
+  if (encoderTicksPerPutaran <= 0.0f) return 0.0f;
+  return ((float)labs(deltaTicks) / encoderTicksPerPutaran) * KELILING_RODA_CM;
 }
 
 // Konversi target jarak (cm) ke perkiraan jumlah pulsa encoder (ticks)
 inline long cmKeTicks(float cm) {
   if (KELILING_RODA_CM <= 0.0f) return 0;
-  return (long)((cm / KELILING_RODA_CM) * ENCODER_TICKS_PER_PUTARAN + 0.5f);
+  return (long)((cm / KELILING_RODA_CM) * encoderTicksPerPutaran + 0.5f);
+}
+
+// Muat nilai kalibrasi PPR encoder dari NVS ESP32 ("agv_cfg" / "enc_ppr")
+inline void loadKalibrasiEncoderNVS() {
+  Preferences prefs;
+  if (prefs.begin("agv_cfg", true)) {
+    float ppr = prefs.getFloat("enc_ppr", -1.0f);
+    prefs.end();
+    if (ppr >= 10.0f && ppr <= 5000.0f) {
+      encoderTicksPerPutaran  = ppr;
+      encoderSudahKalibrasiNVS = true;
+      Serial.print(F("[NVS] Kalibrasi encoder dimuat: "));
+      Serial.print(encoderTicksPerPutaran, 1);
+      Serial.println(F(" ticks/putaran"));
+      return;
+    }
+  }
+  encoderTicksPerPutaran  = ENCODER_TICKS_PER_PUTARAN;
+  encoderSudahKalibrasiNVS = false;
+}
+
+// Simpan nilai kalibrasi PPR encoder ke NVS ESP32 agar persisten saat restart
+inline bool simpanKalibrasiEncoderNVS(float pprBaru) {
+  if (pprBaru < 10.0f || pprBaru > 5000.0f) {
+    Serial.println(F("[ERROR] Nilai PPR harus di rentang 10.0 - 5000.0!"));
+    return false;
+  }
+  encoderTicksPerPutaran  = pprBaru;
+  encoderSudahKalibrasiNVS = true;
+  Preferences prefs;
+  if (prefs.begin("agv_cfg", false)) {
+    prefs.putFloat("enc_ppr", pprBaru);
+    prefs.end();
+  }
+  Serial.print(F("[NVS TERSIMPAN] ENCODER_TICKS_PER_PUTARAN = "));
+  Serial.println(encoderTicksPerPutaran, 1);
+  return true;
 }
 
 // Inisialisasi Seluruh Sensor
@@ -201,6 +242,7 @@ inline void initSensors() {
   pinMode(pinEncoderB, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(pinEncoderA), bacaEncoderA_ISR, RISING);
   attachInterrupt(digitalPinToInterrupt(pinEncoderB), bacaEncoderB_ISR, RISING);
+  loadKalibrasiEncoderNVS();
 
   // Pin Line Follower 5-Ch
   pinMode(pinLine1, INPUT);

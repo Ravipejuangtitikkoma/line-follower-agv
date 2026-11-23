@@ -28,8 +28,8 @@ void setup() {
   Serial.println("\n=======================================================");
   Serial.println("   AGV ROBOT: HIERARCHICAL FINITE STATE MACHINE (HFSM) ");
   Serial.println("   Misi: START -> N0 Kiri -> N2 Kanan -> Checkpoint A  ");
-  Serial.println("         (Encoder ~50cm, 3s) -> Checkpoint C           ");
-  Serial.println("         (Encoder ~200cm, 3s) -> Pulang ke START       ");
+  Serial.println("         (50cm, 3s) -> N6 -> N10 -> Checkpoint C       ");
+  Serial.println("         (40cm, 3s) -> U-Turn 180° -> Pulang ke START  ");
   Serial.println("   Board: Mappi32 (ESP32)                              ");
   Serial.println("=======================================================");
 
@@ -42,6 +42,12 @@ void setup() {
   if (!GUNAKAN_SENSOR_JARAK) {
     Serial.println(F("[INFO] Sensor Jarak HC-SR04: DINONAKTIFKAN (Mobil jalan terus tanpa halangan)."));
   }
+  if (!encoderSudahKalibrasiNVS) {
+    Serial.print(F("[PERINGATAN KALIBRASI] PPR Encoder masih memakai nilai default ("));
+    Serial.print(encoderTicksPerPutaran, 1);
+    Serial.println(F(")!"));
+    Serial.println(F("  -> Sebelum tes rute penuh, sangat disarankan jalankan 'KALIBRASI_50CM' atau 'SET_PPR <nilai>'!"));
+  }
 
   Serial.println("\n[PANDUAN OPERATOR SERIAL MONITOR / LORA]:");
   Serial.println("  Ketik 'START'             -> Mulai Misi Penuh (START -> A -> C -> START)");
@@ -50,7 +56,9 @@ void setup() {
   Serial.println("  Ketik 'STOP'              -> Rem Darurat (E-Stop)");
   Serial.println("  Ketik 'RESET'             -> Reset State Navigasi & Encoder ke Awal");
   Serial.println("  Ketik 'STATUS'            -> Lihat Status Lengkap Misi, State & Encoder");
-  Serial.println("  Ketik 'TEST_ENCODER'      -> Kalibrasi Encoder Roda Kiri (5 detik, live ticks/cm)");
+  Serial.println("  Ketik 'KALIBRASI_50CM'    -> Kalibrasi PPR mudah (dorong 50 cm, lalu ketik SIMPAN_50CM)");
+  Serial.println("  Ketik 'SET_PPR <nilai>'   -> Setel & simpan permanen nilai PPR ke NVS ESP32");
+  Serial.println("  Ketik 'TEST_ENCODER'      -> Cek pulsa encoder roda kiri (5 detik, live ticks/cm)");
   Serial.println("  Ketik 'RESET_ENC'         -> Nolkan Hitungan Pulsa Encoder");
   Serial.println("  Ketik 'TEST_RODA'         -> Diagnostik 4 Arah Roda (Maju/Mundur Tiap Sisi)");
   Serial.println("  Ketik 'TEST_KANAN'        -> Diagnostik Putar Poros Kanan (2 Detik)");

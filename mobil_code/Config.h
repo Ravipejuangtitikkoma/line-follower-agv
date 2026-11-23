@@ -107,6 +107,7 @@ const int KEC_SESUAI_KANAN_MUNDUR           = 144; // Diturunkan 10% (dari 160)
 const int KEC_SESUAI_KIRI_MAJU              = 108; // Torsi penyesuaian saat S4 mendekati target
 const int KEC_SESUAI_KIRI_MUNDUR            = 108; 
 const int DURASI_REM_BELOK_MS               = 35;  // Rem lawan arah 35ms menyerap inersia putar seketika (anti-overshoot) 
+const int DURASI_REM_BELOK_KANAN_MS         = 25;  // Rem lawan arah belok kanan lebih singkat (25ms) agar tidak mental balik 3°-4°
 
 // ================= PARAMETER KHUSUS BELOK KANAN KE-2 =================
 // Mengatasi masalah bablas & memberikan torsi seimbang pada tikungan siku kanan kedua:
@@ -154,7 +155,7 @@ const float ENCODER_TICKS_PER_PUTARAN     = 330.0f; // Ubah sesuai hasil kalibra
 
 // Perkiraan jarak tempuh antar titik (dalam cm) — mudah diubah untuk kalibrasi lapangan:
 const float JARAK_N2_KE_A_CM              = 50.0f;  // Dari selesai belok kanan N2 ke Checkpoint A (~0.5 m / ~808 ticks)
-const float JARAK_A_KE_C_CM               = 200.0f; // Dari Checkpoint A ke Checkpoint C (~2.0 m / ~3232 ticks)
+const float JARAK_N10_KE_C_CM             = 40.0f;  // Dari setelah melintasi N10 (~10 cm) menuju Checkpoint C (~40 cm / ~646 ticks)
 
 // Jeda berhenti 3 detik di Checkpoint A dan Checkpoint C
 const unsigned long DURASI_JEDA_TITIK_C_MS = 3000;  // Jeda bongkar muat 3 detik di Checkpoint C
@@ -169,8 +170,9 @@ const bool          GUNAKAN_FALLBACK_WAKTU_ENCODER = true;  // Otomatis pakai es
 const float         KECEPATAN_ESTIMASI_CM_PER_S    = 20.8f; // Estimasi kecepatan maju (cm/detik) pada KEC_BASE = 58
 const unsigned long WAKTU_DETEKSI_ENCODER_MATI_MS  = 600;   // Jika 600ms berjalan pulsa masih 0, aktifkan fallback waktu
 const unsigned long TIMEOUT_ENCODER_A_MS           = 3500;  // Batas waktu maksimal ruas N2 -> A (~73 cm) agar tidak bablas
-const unsigned long TIMEOUT_ENCODER_C_MS           = 12000; // Batas waktu maksimal ruas A -> C (~250 cm) agar tidak bablas
-const unsigned long LOCKOUT_PENGAMAN_N6_MS         = 600;   // Abaikan garis N2 selama 600ms awal sebelum pengaman simpang N6 aktif
+const unsigned long TIMEOUT_ENCODER_C_MS           = 3500;  // Batas waktu maksimal ruas N10 -> C (~40 cm) agar aman sebelum N14
+const unsigned long LOCKOUT_PENGAMAN_N6_MS         = 600;   // Abaikan garis awal selama 600ms sebelum pengaman simpang aktif
+const unsigned long LOCKOUT_PENGAMAN_SIMPANG_MS    = LOCKOUT_PENGAMAN_N6_MS; // Alias pengaman simpang N6 (Step 2) & N14 (Step 5)
  
 // ================= PENGAMAN KALIBRASI AWAL & SIMPANG KANAN =================
 const int WAKTU_AUTO_ALIGN_MAX_MS          = 250; // Waktu maksimal kalibrasi mikro posisi awal di tempat (ms)
@@ -188,7 +190,7 @@ const unsigned long TIMEOUT_ALIGN_KIRI_MS      = 35;  // Timeout pengaman dipers
 
 // ================= PARAMETER RUTE PULANG (B -> START) =================
 const unsigned long DURASI_JEDA_TITIK_B_MS      = 3000; // Jeda 3 detik di Titik B sebelum otomatis putar balik pulang
-const int OFFSET_MAJU_PUTAR_180_MS             = 765;  // Dikurangi 10% (dari 850ms ke 765ms) agar tempat pemutaran mundur pas
+const int OFFSET_MAJU_PUTAR_180_MS             = 250;  // Diperkecil ke 250ms (~5 cm) agar aman dari ujung N14 saat U-Turn di C
 const int WAKTU_ABAIKAN_180_MS                 = 350;  // Blind window 350ms: abaikan garis lama (0°-120°) saat putar 180°
 const unsigned long DURASI_STOP_S4_PULANG_MS   = 1500; // Berhenti 1.5 detik di Simpang 4 sebelum melaju lurus
 const unsigned long TIMEOUT_PUTAR_180_MS       = 1400; // Batas aman timeout putar balik 180°
