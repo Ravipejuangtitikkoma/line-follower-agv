@@ -27,8 +27,9 @@ void setup() {
 
   Serial.println("\n=======================================================");
   Serial.println("   AGV ROBOT: HIERARCHICAL FINITE STATE MACHINE (HFSM) ");
-  Serial.println("   Misi: START -> Simpang 3 Kiri -> Simpang 3 Kanan -> ");
-  Serial.println("         Titik A (3s) -> Simpang 4 (Lurus) -> Titik B  ");
+  Serial.println("   Misi: START -> N0 Kiri -> N2 Kanan -> Checkpoint A  ");
+  Serial.println("         (Encoder ~50cm, 3s) -> Checkpoint C           ");
+  Serial.println("         (Encoder ~200cm, 3s) -> Pulang ke START       ");
   Serial.println("   Board: Mappi32 (ESP32)                              ");
   Serial.println("=======================================================");
 
@@ -43,12 +44,14 @@ void setup() {
   }
 
   Serial.println("\n[PANDUAN OPERATOR SERIAL MONITOR / LORA]:");
-  Serial.println("  Ketik 'START'             -> Mulai Misi Penuh (State 1..24 PP)");
-  Serial.println("  Ketik 'LANJUT'            -> Lanjut dari Titik A ke Titik B (Bypass timer 3s)");
-  Serial.println("  Ketik 'PULANG'            -> Mulai Putar Balik Pulang ke START (Bypass timer di B)");
+  Serial.println("  Ketik 'START'             -> Mulai Misi Penuh (START -> A -> C -> START)");
+  Serial.println("  Ketik 'LANJUT'            -> Bypass jeda 3 detik di Checkpoint A / C");
+  Serial.println("  Ketik 'PULANG'            -> Mulai Putar Balik Pulang ke START (dari C)");
   Serial.println("  Ketik 'STOP'              -> Rem Darurat (E-Stop)");
-  Serial.println("  Ketik 'RESET'             -> Reset State Navigasi ke Awal");
-  Serial.println("  Ketik 'STATUS'            -> Lihat Status Lengkap Misi & State");
+  Serial.println("  Ketik 'RESET'             -> Reset State Navigasi & Encoder ke Awal");
+  Serial.println("  Ketik 'STATUS'            -> Lihat Status Lengkap Misi, State & Encoder");
+  Serial.println("  Ketik 'TEST_ENCODER'      -> Kalibrasi Encoder Roda Kiri (5 detik, live ticks/cm)");
+  Serial.println("  Ketik 'RESET_ENC'         -> Nolkan Hitungan Pulsa Encoder");
   Serial.println("  Ketik 'TEST_RODA'         -> Diagnostik 4 Arah Roda (Maju/Mundur Tiap Sisi)");
   Serial.println("  Ketik 'TEST_KANAN'        -> Diagnostik Putar Poros Kanan (2 Detik)");
   Serial.println("  Ketik 'TEST_MUNDUR_KANAN' -> Diagnostik Driver Kanan Mundur (Pin 17 / LPWM)");

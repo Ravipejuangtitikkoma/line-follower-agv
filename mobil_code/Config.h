@@ -142,6 +142,26 @@ const unsigned long DURASI_MENGGELIR_KANAN_MS  = 0;    // 0ms: Putaran buta dihi
 const unsigned long DURASI_PENETRASI_TITIK_A_MS= 300;  // Maju sedikit memasuki zona parkir Titik A
 const unsigned long DURASI_JEDA_TITIK_A_MS     = 3000; // Jeda bongkar muat 3 detik di Titik A sebelum ke Titik B
 const unsigned long DURASI_PENETRASI_TITIK_B_MS= 495;  // Dikurangi 10% (dari 550ms ke 495ms) sesuai permintaan user agar tidak kejauhan
+
+// ================= PARAMETER ENCODER RODA KIRI & JARAK CHECKPOINT =================
+// Fisik robot (PANDUAN_LENGKAP_AGV.md & rumus.md): Diameter roda = 6.5 cm (Keliling ~20.42 cm)
+// Estimasi encoder JGA25-370 / JGB37-520 (test_sensor_motor.ino): 330 ticks/putaran roda (11 PPR x 1:30)
+// Peta arena 3m x 3m (3 ruas horizontal @ 100 cm):
+//   N2 --(50cm)--> [A] --(50cm)--> N6 --(100cm)--> N10 --(50cm)--> [C] --(50cm)--> N14
+const float DIAMETER_RODA_CM              = 6.5f;
+const float KELILING_RODA_CM              = 3.1415926f * DIAMETER_RODA_CM; // ~20.42 cm per putaran roda
+const float ENCODER_TICKS_PER_PUTARAN     = 330.0f; // Ubah sesuai hasil kalibrasi TEST_ENCODER (1 putaran penuh roda)
+
+// Perkiraan jarak tempuh antar titik (dalam cm) — mudah diubah untuk kalibrasi lapangan:
+const float JARAK_N2_KE_A_CM              = 50.0f;  // Dari selesai belok kanan N2 ke Checkpoint A (~0.5 m / ~808 ticks)
+const float JARAK_A_KE_C_CM               = 200.0f; // Dari Checkpoint A ke Checkpoint C (~2.0 m / ~3232 ticks)
+
+// Jeda berhenti 3 detik di Checkpoint A dan Checkpoint C
+const unsigned long DURASI_JEDA_TITIK_C_MS = 3000;  // Jeda bongkar muat 3 detik di Checkpoint C
+
+// true  = Setelah jeda 3 detik di Checkpoint C, robot otomatis U-Turn 180° & pulang ke START
+// false = Robot berhenti (STANDBY) di Checkpoint C menunggu perintah 'PULANG'
+const bool OTOMATIS_PULANG_SETELAH_C      = true;
  
 // ================= PENGAMAN KALIBRASI AWAL & SIMPANG KANAN =================
 const int WAKTU_AUTO_ALIGN_MAX_MS          = 250; // Waktu maksimal kalibrasi mikro posisi awal di tempat (ms)
