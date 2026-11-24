@@ -693,11 +693,15 @@ inline int pecahTokenArgumen(const String& s, String outTokens[], int maxTokens)
 // Cetak ringkasan bantuan perintah Serial Monitor
 inline void cetakBantuanSerial() {
   Serial.println("\n================ [PANDUAN PERINTAH SERIAL MONITOR (115200)] ================");
-  Serial.println(" [1] UBAH RUTE OTOMATIS (GRAPH ARENA 3m x 3m, STASIUN A/B/C/D/E):");
-  Serial.println("   RUTE A,C                 -> Susun rute PP START -> A -> C -> START");
-  Serial.println("   RUTE B   / RUTE E,D      -> Susun rute PP ke stasiun manapun (maks 5)");
-  Serial.println("   RUTE_ONEWAY A,C          -> Susun rute searah & berhenti di tujuan akhir");
-  Serial.println("   CMD:GO:A,C               -> Susun rute PP & langsung jalan (mode LoRa)");
+  Serial.println(" [1] PILIH RUTE CEPAT ANTAR-GUDANG (LOOP MAJU TANPA U-TURN):");
+  Serial.println("   RUTE A,C  (atau RUTE 1)  -> START -> Gudang A -> Gudang C -> Pulang START");
+  Serial.println("   RUTE A,B  (atau RUTE 2)  -> START -> Gudang A -> Gudang B -> Pulang START");
+  Serial.println("   RUTE E,D  (atau RUTE 3)  -> START -> Gudang E -> Gudang D -> Pulang START");
+  Serial.println("   RUTE B,D  (atau RUTE 4)  -> START -> Gudang B -> Gudang D -> Pulang START");
+  Serial.println("   RUTE <stasiun1>,<stasiun2> -> Susun rute PP ke stasiun manapun (contoh: RUTE B, RUTE E)");
+  Serial.println("   RUTE_ONEWAY <stasiun>    -> Susun rute searah & berhenti di tujuan akhir");
+  Serial.println("   CMD:GO:<stasiun>         -> Susun rute PP & langsung jalan (mode LoRa)");
+  Serial.println("   MAP_SAVE                 -> SIMPAN PERMANEN ke Flash ESP32 (cabut USB tetap ingat!)");
   Serial.println(" [2] LIHAT & EDIT MAPPING MANUAL STEP-BY-STEP:");
   Serial.println("   MAP                      -> Tampilkan tabel mapping aktif");
   Serial.println("   MAP_CLEAR                -> Kosongkan seluruh tabel mapping");
@@ -808,14 +812,55 @@ inline void prosesPerintah(String cmd) {
   else if (cmd == "MAP" || cmd == "LIHAT_MAP") {
     tampilkanTabelMapping();
   }
+  else if (cmd == "RUTE 1" || cmd == "RUTE_AC" || cmd == "RUTE AC") {
+    if (bangunRuteStasiun("A,C", true)) {
+      statusMisiSaatIni = MISI_STANDBY;
+      berhentiTotal();
+      stepIdxSaatIni = 0;
+      simpanMappingKeFlash(); // Otomatis simpan permanen ke Flash ESP32
+      tampilkanTabelMapping();
+      Serial.println(">>> [SUKSES TERSIMPAN] RUTE A ke C aktif & tersimpan permanen di Flash! Kabel USB sudah boleh dicabut.");
+    }
+  }
+  else if (cmd == "RUTE 2" || cmd == "RUTE_AB" || cmd == "RUTE AB") {
+    if (bangunRuteStasiun("A,B", true)) {
+      statusMisiSaatIni = MISI_STANDBY;
+      berhentiTotal();
+      stepIdxSaatIni = 0;
+      simpanMappingKeFlash(); // Otomatis simpan permanen ke Flash ESP32
+      tampilkanTabelMapping();
+      Serial.println(">>> [SUKSES TERSIMPAN] RUTE A ke B aktif & tersimpan permanen di Flash! Kabel USB sudah boleh dicabut.");
+    }
+  }
+  else if (cmd == "RUTE 3" || cmd == "RUTE_ED" || cmd == "RUTE ED") {
+    if (bangunRuteStasiun("E,D", true)) {
+      statusMisiSaatIni = MISI_STANDBY;
+      berhentiTotal();
+      stepIdxSaatIni = 0;
+      simpanMappingKeFlash(); // Otomatis simpan permanen ke Flash ESP32
+      tampilkanTabelMapping();
+      Serial.println(">>> [SUKSES TERSIMPAN] RUTE E ke D aktif & tersimpan permanen di Flash! Kabel USB sudah boleh dicabut.");
+    }
+  }
+  else if (cmd == "RUTE 4" || cmd == "RUTE_BD" || cmd == "RUTE BD") {
+    if (bangunRuteStasiun("B,D", true)) {
+      statusMisiSaatIni = MISI_STANDBY;
+      berhentiTotal();
+      stepIdxSaatIni = 0;
+      simpanMappingKeFlash(); // Otomatis simpan permanen ke Flash ESP32
+      tampilkanTabelMapping();
+      Serial.println(">>> [SUKSES TERSIMPAN] RUTE B ke D aktif & tersimpan permanen di Flash! Kabel USB sudah boleh dicabut.");
+    }
+  }
   else if (cmd.startsWith("RUTE ")) {
     String arg = cmd.substring(5);
     if (bangunRuteStasiun(arg, true)) {
       statusMisiSaatIni = MISI_STANDBY;
       berhentiTotal();
       stepIdxSaatIni = 0;
+      simpanMappingKeFlash(); // Otomatis simpan permanen ke Flash ESP32
       tampilkanTabelMapping();
-      Serial.println(">>> Ketik 'MAP_SAVE' untuk simpan permanen ke Flash, atau 'START' untuk langsung jalan.");
+      Serial.println(">>> [SUKSES TERSIMPAN] Rute aktif & tersimpan permanen di Flash! Kabel USB sudah boleh dicabut.");
     }
   }
   else if (cmd.startsWith("RUTE_ONEWAY ")) {
@@ -870,7 +915,7 @@ inline void prosesPerintah(String cmd) {
       return;
     }
     float targetCm   = tok[1].toFloat();
-    uint16_t pauseMs = (uint16_t)constrain(tok[2].toInt(), 0L, 60000L);
+    uint16_t pauseMs = (uint16_t)constrain((long)tok[2].toInt(), 0L, 60000L);
     char lbl[20];
     snprintf(lbl, sizeof(lbl), "MANUAL_%d", jumlahStepAktif);
     isiDefaultStepDariAksi(ruteAktif[jumlahStepAktif], trig, targetCm, pauseMs, act, lbl);
@@ -901,7 +946,7 @@ inline void prosesPerintah(String cmd) {
       return;
     }
     float targetCm   = tok[2].toFloat();
-    uint16_t pauseMs = (uint16_t)constrain(tok[3].toInt(), 0L, 60000L);
+    uint16_t pauseMs = (uint16_t)constrain((long)tok[3].toInt(), 0L, 60000L);
     char lblLama[20];
     strncpy(lblLama, ruteAktif[idx].label, sizeof(lblLama) - 1);
     lblLama[sizeof(lblLama) - 1] = '\0';
@@ -960,7 +1005,7 @@ inline void prosesPerintah(String cmd) {
     }
   }
   else if (cmd.startsWith("SET_JEDA ")) {
-    long jeda = constrain(cmd.substring(9).toInt(), 0L, 60000L);
+    long jeda = constrain((long)cmd.substring(9).toInt(), 0L, 60000L);
     runtimeJedaStasiunMs = (unsigned long)jeda;
     for (int i = 0; i < jumlahStepAktif; i++) {
       if (ruteAktif[i].trigger == TRIG_ENCODER_JARAK) {

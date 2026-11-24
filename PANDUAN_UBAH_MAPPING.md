@@ -70,39 +70,54 @@ Arena berukuran **3 meter × 3 meter** (tiap kotak grid berukuran ±100 cm × 10
 
 ---
 
-## 3. Cara 1 — Ubah Rute Stasiun Otomatis
+## 3. Cara 1 — Ubah Rute Antar-Gudang Otomatis (Loop Maju Tanpa U-Turn)
 
-Modul [mobil_code/GridGraph.h](mobil_code/GridGraph.h) memodelkan seluruh 23 titik arena (`START`, `N0`–`N16`, `A`–`E`) dengan algoritma jalur terpendek **Dijkstra**. Anda cukup menuliskan daftar huruf stasiun yang ingin dikunjungi (maksimal 5 stasiun per misi):
+Modul [mobil_code/GridGraph.h](mobil_code/GridGraph.h) memodelkan seluruh 23 titik arena (`START`, `N0`–`N16`, `A`–`E`) dengan algoritma jalur grid **Loop Maju (Forward Grid Loop)** tanpa U-turn 180° demi stabilitas robot 4WD di atas kardus. Anda cukup menuliskan daftar stasiun gudang yang ingin dikunjungi:
 
-| Perintah di Serial Monitor | Efek & Perilaku Robot |
+| Perintah di Serial Monitor | Rute & Perilaku Robot (Semua Putaran 90° Bersih) |
 | :--- | :--- |
-| `RUTE A,C` | Susun rute **Pulang-Pergi (PP)**: `START → A (jeda 3s) → C (jeda 3s) → U-Turn → pulang START`. Robot masuk `STANDBY` agar Anda bisa cek `MAP` & `MAP_SAVE`. |
-| `RUTE B` | Susun rute **PP**: `START → N0 (kanan) → N3 (kiri) → N7 → B (jeda 3s) → U-Turn → pulang START`. |
-| `RUTE E,D` | Susun rute **PP**: `START → E (jeda 3s) → D (jeda 3s) → U-Turn → pulang START`. |
-| `RUTE A,B,D` | Susun rute **PP** mengunjungi 3 stasiun berurutan: `A → B → D → START`. |
-| `RUTE_ONEWAY A,C` | Susun rute **searah** (`START → A → C`), lalu berhenti `STANDBY` di stasiun terakhir tanpa pulang. |
-| `CMD:GO:A,C` | Susun rute **PP** dan **langsung jalan seketika** *(format kompatibel LoRa)*. |
+| `RUTE A,C` *(atau `RUTE 1`)* | **Gudang A ke C (Default):**<br>`START → N0 (kiri) → N2 (kanan) → [A] (jeda 3s) → N6 → N10 → [C] (jeda 3s) → N14 (kanan) → N15 (kanan) → N11 → N7 → N3 (kanan) → N0 (kiri) → START` |
+| `RUTE A,B` *(atau `RUTE 2`)* | **Gudang A ke B:**<br>`START → N0 (kiri) → N2 (kanan) → [A] (jeda 3s) → N6 (kanan) → N7 (kiri) → [B] (jeda 3s) → N11 (kiri) → N10 (kiri) → N6 → N2 (kiri) → N0 (kanan) → START` |
+| `RUTE E,D` *(atau `RUTE 3`)* | **Gudang E ke D:**<br>`START → N0 (kanan) → N3 (lurus) → N4 (kiri) → [E] (jeda 3s) → N8 (lurus) → N12 (lurus) → [D] (jeda 3s) → N16 (kiri) → N15 (kiri) → N11 → N7 → N3 (kanan) → N0 (kiri) → START` |
+| `RUTE B,D` *(atau `RUTE 4`)* | **Gudang B ke D:**<br>`START → N0 (kanan) → N3 (kiri) → N7 → [B] (jeda 3s) → N11 (kanan) → N12 (kiri) → [D] (jeda 3s) → N16 (kiri) → N15 (kiri) → N11 → N7 → N3 (kanan) → N0 (kiri) → START` |
+| `RUTE <stasiun>` | **Rute Dinamis Bebas (misal `RUTE B`, `RUTE E`, dll.):**<br>Robot menghitung jalur loop terpendek otomatis ke stasiun tujuan lalu pulang ke `N0` dan `START`. |
+| `RUTE_ONEWAY <stasiun>` | Susun rute **searah** (`START → tujuan`), lalu berhenti `STANDBY` di stasiun terakhir tanpa pulang. |
+| `CMD:GO:<stasiun>` | Susun rute **PP** dan **langsung jalan seketika** *(format kompatibel LoRa)*. |
 
-### Contoh Praktik Mengganti Rute ke Stasiun `B` lalu `D`:
+### Contoh Praktik Mengganti Rute ke Gudang `A` ke `B`:
 
 1. Buka Serial Monitor Arduino IDE (**`115200 baud`**, line ending **`Newline`** atau **`Both NL & CR`**).
-2. Ketik perintah berikut satu per satu:
+2. Ketik perintah berikut:
    ```text
-   STANDBY
-   RUTE B,D
+   RUTE A,B
    ```
-3. Robot otomatis mencetak tabel mapping hasil susunan Graph Planner untuk dicek:
+   *(atau cukup ketik `RUTE 2`)*
+3. Robot otomatis memuat 12 langkah rute loop presisi dan mencetak tabel ke Serial Monitor:
    ```text
    ================ [TABEL MAPPING RUTE AKTIF] ================
-   Nama Rute   : RUTE_B_D_PP
+   Nama Rute   : RUTE_A_B_LOOP
    Jumlah Step : 12 / 28
    ...
    ```
-4. Jika sudah sesuai, simpan permanen ke Flash ESP32:
+4. Simpan permanen ke Flash ESP32:
    ```text
    MAP_SAVE
    ```
-5. Untuk uji coba langsung saat masih terhubung USB, ketik `START`. Untuk uji mandiri di arena, cabut kabel USB dan nyalakan baterai 12V.
+5. Untuk mulai jalan saat masih di laptop, ketik `START`. Atau cabut kabel USB, bawa robot ke arena, dan nyalakan baterai 12V (robot otomatis menjalankan rute A ke B tersebut).
+
+### Contoh Praktik Mengganti Rute ke Gudang `E` ke `D`:
+
+1. Di Serial Monitor, ketik:
+   ```text
+   RUTE E,D
+   ```
+   *(atau cukup ketik `RUTE 3`)*
+2. Robot memuat 14 langkah rute loop `RUTE_E_D_LOOP`.
+3. Ketik:
+   ```text
+   MAP_SAVE
+   ```
+4. Rute permanen tersimpan! Ketik `START` untuk menjalankan.
 
 > [!NOTE]
 > Jika ingin kembali persis ke mapping awal bawaan (`DEFAULT_A_C_PP`: hitung encoder utuh `50 cm` ke `A` dan `200 cm` ke `C`), jalankan `MAP_DEFAULT`.

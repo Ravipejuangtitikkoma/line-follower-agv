@@ -152,9 +152,9 @@ inline bool cariJalurTerpendekGrid(int startNode,
       if (dOut == dIn) {
         turnCost = 0;
       } else if (((dIn + 2) % 4) == dOut) {
-        // Putar balik 180° hanya diizinkan pada ruas lurus titik stasiun
+        // U-turn 180° dihindari agar robot selalu memilih jalur loop maju (forward loop) di grid
         if (!isNodeStasiun(u)) continue;
-        turnCost = 60;
+        turnCost = 800; // Ditingkatkan sangat tinggi agar Dijkstra mengutamakan loop maju tanpa U-Turn
       } else {
         turnCost = 25;
       }
@@ -235,6 +235,19 @@ inline bool bangunRuteStasiun(const String& daftarRaw, bool pulangKeStart) {
     return false;
   }
 
+  // Cek apakah cocok dengan preset teruji bawaan (A-C, A-B, E-D, B-D)
+  if (numTargets == 2 && pulangKeStart) {
+    if (hurufTargets[0] == 'A' && hurufTargets[1] == 'C') {
+      return muatPresetRute(RUTE_AC);
+    } else if (hurufTargets[0] == 'A' && hurufTargets[1] == 'B') {
+      return muatPresetRute(RUTE_AB);
+    } else if (hurufTargets[0] == 'E' && hurufTargets[1] == 'D') {
+      return muatPresetRute(RUTE_ED);
+    } else if (hurufTargets[0] == 'B' && hurufTargets[1] == 'D') {
+      return muatPresetRute(RUTE_BD);
+    }
+  }
+
   if (pulangKeStart) {
     waypoints[numWp++] = ND_START;
   }
@@ -292,9 +305,13 @@ inline bool bangunRuteStasiun(const String& daftarRaw, bool pulangKeStart) {
       int rightDir = (dirIn + 1) % 4;
       bool hasLeft  = (GRID_NODES[u].nbr[leftDir]  >= 0);
       bool hasRight = (GRID_NODES[u].nbr[rightDir] >= 0);
+      bool hasAhead = (GRID_NODES[u].nbr[dirIn]    >= 0);
 
       StepTrigger trig = TRIG_PEREMPATAN;
-      if (hasLeft && hasRight) {
+      if (!hasAhead) {
+        // Ujung garis / siku sudut / simpang T melintang (tidak ada jalur lurus di depan)
+        trig = (rel == 3) ? TRIG_T_KIRI : TRIG_PEREMPATAN;
+      } else if (hasLeft && hasRight) {
         trig = (rel == 3) ? TRIG_T_KIRI : TRIG_PEREMPATAN;
       } else if (hasRight && !hasLeft) {
         trig = TRIG_CABANG_KANAN;

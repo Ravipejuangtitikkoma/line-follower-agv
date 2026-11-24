@@ -31,8 +31,10 @@ void setup() {
 
   Serial.println("\n=======================================================");
   Serial.println("   AGV ROBOT: HIERARCHICAL FINITE STATE MACHINE (HFSM) ");
-  Serial.println("   Rute Default Loop: START -> N0 -> N2 -> A -> N6 -> N10 -> C");
-  Serial.println("                      -> N14 -> N15 -> N11 -> N7 -> N3 -> N0 -> START");
+  Serial.print("   Rute Aktif  : "); Serial.println(namaRuteAktif);
+  Serial.println("   Ganti Rute  : Ketik 'RUTE A,B' | 'RUTE E,D' | 'RUTE A,C'");
+  Serial.println("                 (atau 'RUTE 1', 'RUTE 2', 'RUTE 3')");
+  Serial.println("   Simpan Flash: Ketik 'MAP_SAVE' (Permanen saat cabut USB)");
   Serial.println("   Mapping Dinamis Serial + Flash NVS | Board: Mappi32 (ESP32)");
   Serial.println("=======================================================");
 

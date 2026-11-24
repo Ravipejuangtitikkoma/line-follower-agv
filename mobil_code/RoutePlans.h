@@ -82,6 +82,70 @@ const PlanStep RUTE_DEFAULT_AC[] = {
 const int JUMLAH_STEP_DEFAULT_AC = sizeof(RUTE_DEFAULT_AC) / sizeof(RUTE_DEFAULT_AC[0]);
 
 // ====================================================================
+// TABEL PRESET GUDANG A KE B (LOOP TANPA U-TURN):
+// START -> N0 -> N2 -> [A] -> N6 -> N7 -> [B] -> N11 -> N10 -> N6 -> N2 -> N0 -> START
+// ====================================================================
+const PlanStep RUTE_PRESET_AB[] = {
+  // label,               trigger,             lockout,                    targetCm,         maxDurMs,             stopNode, preMove,                     usePD, brkPwm, brkMs, pause,                    action
+  { "N0_BELOK_KIRI",      TRIG_T_KIRI,         250,                        0.0f,             0,                    false,    OFFSET_MAJU_BELOK_MS,        false, 105,    45,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_LEFT        }, // 0
+  { "N2_BELOK_KANAN",     TRIG_CABANG_KANAN,   WAKTU_MINIMAL_RUAS2_MS,     0.0f,             0,                    false,    OFFSET_MAJU_SIMPANG_KANAN_MS,false, 105,    45,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_RIGHT       }, // 1
+  { "CHECKPOINT_A",       TRIG_ENCODER_JARAK,  100,                        JARAK_N2_KE_A_CM, TIMEOUT_ENCODER_A_MS, true,     0,                           false, 85,     35,    DURASI_JEDA_TITIK_A_MS,   ACT_PAUSE_ONLY       }, // 2
+  { "N6_BELOK_KANAN",     TRIG_PEREMPATAN,     250,                        0.0f,             0,                    false,    OFFSET_MAJU_SIMPANG_KANAN_MS,false, 105,    45,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_RIGHT       }, // 3
+  { "N7_BELOK_KIRI",      TRIG_PEREMPATAN,     350,                        0.0f,             0,                    false,    OFFSET_MAJU_BELOK_MS,        false, 105,    45,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_LEFT        }, // 4
+  { "CHECKPOINT_B",       TRIG_ENCODER_JARAK,  100,                        50.0f,            TIMEOUT_ENCODER_A_MS, true,     0,                           false, 85,     35,    DURASI_JEDA_TITIK_A_MS,   ACT_PAUSE_ONLY       }, // 5
+  { "PULANG_N11_KIRI",    TRIG_PEREMPATAN,     250,                        0.0f,             0,                    false,    OFFSET_MAJU_BELOK_MS,        false, 105,    45,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_LEFT_PULANG }, // 6
+  { "PULANG_N10_KIRI",    TRIG_PEREMPATAN,     350,                        0.0f,             0,                    false,    OFFSET_MAJU_BELOK_MS,        false, 105,    45,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_LEFT_PULANG }, // 7
+  { "PULANG_N6_LURUS",    TRIG_PEREMPATAN,     400,                        0.0f,             0,                    false,    0,                           false, 0,      0,     0,                        ACT_CROSS_STRAIGHT   }, // 8
+  { "PULANG_N2_KIRI",     TRIG_PEREMPATAN,     400,                        0.0f,             0,                    false,    OFFSET_MAJU_BELOK_MS,        false, 105,    45,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_LEFT_PULANG }, // 9
+  { "PULANG_N0_KANAN",    TRIG_CABANG_KANAN,   WAKTU_MINIMAL_RUAS2_MS,     0.0f,             0,                    false,    OFFSET_MAJU_SIMPANG_KANAN_MS,false, 105,    45,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_RIGHT       }, // 10
+  { "FINISH_START",       TRIG_PEREMPATAN,     350,                        0.0f,             0,                    false,    0,                           false, 85,     35,    50,                       ACT_STOP_MISSION     }  // 11
+};
+
+// ====================================================================
+// TABEL PRESET GUDANG E KE D (LOOP TANPA U-TURN):
+// START -> N0 -> N3 -> N4 -> [E] -> N8 -> N12 -> [D] -> N16 -> N15 -> N11 -> N7 -> N3 -> N0 -> START
+// ====================================================================
+const PlanStep RUTE_PRESET_ED[] = {
+  // label,               trigger,             lockout,                    targetCm,         maxDurMs,             stopNode, preMove,                     usePD, brkPwm, brkMs, pause,                    action
+  { "N0_BELOK_KANAN",     TRIG_PEREMPATAN,     250,                        0.0f,             0,                    false,    OFFSET_MAJU_SIMPANG_KANAN_MS,false, 105,    45,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_RIGHT       }, // 0
+  { "LEWAT_N3",           TRIG_CABANG_KIRI,    350,                        0.0f,             0,                    false,    0,                           false, 0,      0,     0,                        ACT_CROSS_STRAIGHT   }, // 1
+  { "N4_BELOK_KIRI",      TRIG_T_KIRI,         350,                        0.0f,             0,                    false,    OFFSET_MAJU_BELOK_MS,        false, 105,    45,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_LEFT        }, // 2
+  { "CHECKPOINT_E",       TRIG_ENCODER_JARAK,  100,                        50.0f,            TIMEOUT_ENCODER_A_MS, true,     0,                           false, 85,     35,    DURASI_JEDA_TITIK_A_MS,   ACT_PAUSE_ONLY       }, // 3
+  { "LEWAT_N8",           TRIG_PEREMPATAN,     250,                        0.0f,             0,                    false,    0,                           false, 0,      0,     0,                        ACT_CROSS_STRAIGHT   }, // 4
+  { "LEWAT_N12",          TRIG_PEREMPATAN,     400,                        0.0f,             0,                    false,    0,                           false, 0,      0,     0,                        ACT_CROSS_STRAIGHT   }, // 5
+  { "CHECKPOINT_D",       TRIG_ENCODER_JARAK,  100,                        50.0f,            TIMEOUT_ENCODER_C_MS, true,     0,                           false, 85,     35,    DURASI_JEDA_TITIK_C_MS,   ACT_PAUSE_ONLY       }, // 6
+  { "PULANG_N16_KIRI",    TRIG_T_KIRI,         250,                        0.0f,             0,                    false,    OFFSET_MAJU_BELOK_MS,        false, 105,    45,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_LEFT_PULANG }, // 7
+  { "PULANG_N15_KIRI",    TRIG_T_KIRI,         350,                        0.0f,             0,                    false,    OFFSET_MAJU_BELOK_MS,        false, 105,    45,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_LEFT_PULANG }, // 8
+  { "PULANG_N11",         TRIG_PEREMPATAN,     400,                        0.0f,             0,                    false,    0,                           false, 0,      0,     0,                        ACT_CROSS_STRAIGHT   }, // 9
+  { "PULANG_N7",          TRIG_PEREMPATAN,     400,                        0.0f,             0,                    false,    0,                           false, 0,      0,     0,                        ACT_CROSS_STRAIGHT   }, // 10
+  { "PULANG_N3_KANAN",    TRIG_PEREMPATAN,     400,                        0.0f,             0,                    false,    OFFSET_MAJU_SIMPANG_KANAN_MS,false, 105,    45,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_RIGHT       }, // 11
+  { "PULANG_N0_KIRI",     TRIG_CABANG_KIRI,    WAKTU_MINIMAL_RUAS2_MS,     0.0f,             0,                    false,    OFFSET_MAJU_BELOK_MS,        false, 105,    45,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_LEFT_PULANG }, // 12
+  { "FINISH_START",       TRIG_PEREMPATAN,     350,                        0.0f,             0,                    false,    0,                           false, 85,     35,    50,                       ACT_STOP_MISSION     }  // 13
+};
+
+// ====================================================================
+// TABEL PRESET GUDANG B KE D (LOOP TANPA U-TURN):
+// START -> N0 -> N3 -> N7 -> [B] -> N11 -> N12 -> [D] -> N16 -> N15 -> N11 -> N7 -> N3 -> N0 -> START
+// ====================================================================
+const PlanStep RUTE_PRESET_BD[] = {
+  // label,               trigger,             lockout,                    targetCm,         maxDurMs,             stopNode, preMove,                     usePD, brkPwm, brkMs, pause,                    action
+  { "N0_BELOK_KANAN",     TRIG_PEREMPATAN,     250,                        0.0f,             0,                    false,    OFFSET_MAJU_SIMPANG_KANAN_MS,false, 105,    45,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_RIGHT       }, // 0
+  { "N3_BELOK_KIRI",      TRIG_CABANG_KIRI,    350,                        0.0f,             0,                    false,    OFFSET_MAJU_BELOK_MS,        false, 105,    45,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_LEFT        }, // 1
+  { "LEWAT_N7",           TRIG_PEREMPATAN,     350,                        0.0f,             0,                    false,    0,                           false, 0,      0,     0,                        ACT_CROSS_STRAIGHT   }, // 2
+  { "CHECKPOINT_B",       TRIG_ENCODER_JARAK,  100,                        50.0f,            TIMEOUT_ENCODER_A_MS, true,     0,                           false, 85,     35,    DURASI_JEDA_TITIK_A_MS,   ACT_PAUSE_ONLY       }, // 3
+  { "N11_BELOK_KANAN",    TRIG_PEREMPATAN,     250,                        0.0f,             0,                    false,    OFFSET_MAJU_SIMPANG_KANAN_MS,false, 105,    45,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_RIGHT       }, // 4
+  { "N12_BELOK_KIRI",     TRIG_CABANG_KIRI,    350,                        0.0f,             0,                    false,    OFFSET_MAJU_BELOK_MS,        false, 105,    45,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_LEFT        }, // 5
+  { "CHECKPOINT_D",       TRIG_ENCODER_JARAK,  100,                        50.0f,            TIMEOUT_ENCODER_C_MS, true,     0,                           false, 85,     35,    DURASI_JEDA_TITIK_C_MS,   ACT_PAUSE_ONLY       }, // 6
+  { "PULANG_N16_KIRI",    TRIG_T_KIRI,         250,                        0.0f,             0,                    false,    OFFSET_MAJU_BELOK_MS,        false, 105,    45,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_LEFT_PULANG }, // 7
+  { "PULANG_N15_KIRI",    TRIG_T_KIRI,         350,                        0.0f,             0,                    false,    OFFSET_MAJU_BELOK_MS,        false, 105,    45,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_LEFT_PULANG }, // 8
+  { "PULANG_N11",         TRIG_PEREMPATAN,     400,                        0.0f,             0,                    false,    0,                           false, 0,      0,     0,                        ACT_CROSS_STRAIGHT   }, // 9
+  { "PULANG_N7",          TRIG_PEREMPATAN,     400,                        0.0f,             0,                    false,    0,                           false, 0,      0,     0,                        ACT_CROSS_STRAIGHT   }, // 10
+  { "PULANG_N3_KANAN",    TRIG_PEREMPATAN,     400,                        0.0f,             0,                    false,    OFFSET_MAJU_SIMPANG_KANAN_MS,false, 105,    45,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_RIGHT       }, // 11
+  { "PULANG_N0_KIRI",     TRIG_CABANG_KIRI,    WAKTU_MINIMAL_RUAS2_MS,     0.0f,             0,                    false,    OFFSET_MAJU_BELOK_MS,        false, 105,    45,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_LEFT_PULANG }, // 12
+  { "FINISH_START",       TRIG_PEREMPATAN,     350,                        0.0f,             0,                    false,    0,                           false, 85,     35,    50,                       ACT_STOP_MISSION     }  // 13
+};
+
+// ====================================================================
 // BUFFER MAPPING AKTIF DI RAM (DIUBAH VIA SERIAL / LORA / FLASH NVS)
 // ====================================================================
 static PlanStep      ruteAktif[MAX_PLAN_STEPS];
@@ -121,26 +185,60 @@ inline PlanStep buatPlanStep(const char* lbl,
   return s;
 }
 
-// Muat preset default bawaan pabrik ke RAM
-inline void muatRuteDefaultAC(bool resetParam = false) {
+// Muat preset rute pilihan ke RAM (AC, AB, ED, BD)
+inline bool muatPresetRute(PresetRuteId idPreset, bool resetParam = false) {
   if (resetParam) {
     if (!encoderSudahKalibrasiNVS) {
       runtimeTicksPerPutaran = ENCODER_TICKS_PER_PUTARAN;
     }
     runtimeJedaStasiunMs   = DURASI_JEDA_TITIK_A_MS;
-    runtimePulangOtomatis  = OTOMATIS_PULANG_SETELAH_C;
+    runtimePulangOtomatis  = true;
     runtimeAutoStart       = AUTO_START_SAAT_NYALA;
   }
 
-  jumlahStepAktif = (JUMLAH_STEP_DEFAULT_AC <= MAX_PLAN_STEPS) ? JUMLAH_STEP_DEFAULT_AC : MAX_PLAN_STEPS;
+  const PlanStep* srcPreset = nullptr;
+  int countPreset = 0;
+  const char* nama = "DEFAULT_AC_LOOP";
+
+  switch (idPreset) {
+    case RUTE_AB:
+      srcPreset   = RUTE_PRESET_AB;
+      countPreset = sizeof(RUTE_PRESET_AB) / sizeof(RUTE_PRESET_AB[0]);
+      nama        = "RUTE_A_B_LOOP";
+      break;
+    case RUTE_ED:
+      srcPreset   = RUTE_PRESET_ED;
+      countPreset = sizeof(RUTE_PRESET_ED) / sizeof(RUTE_PRESET_ED[0]);
+      nama        = "RUTE_E_D_LOOP";
+      break;
+    case RUTE_BD:
+      srcPreset   = RUTE_PRESET_BD;
+      countPreset = sizeof(RUTE_PRESET_BD) / sizeof(RUTE_PRESET_BD[0]);
+      nama        = "RUTE_B_D_LOOP";
+      break;
+    case RUTE_AC:
+    default:
+      srcPreset   = RUTE_DEFAULT_AC;
+      countPreset = sizeof(RUTE_DEFAULT_AC) / sizeof(RUTE_DEFAULT_AC[0]);
+      nama        = "RUTE_A_C_LOOP";
+      break;
+  }
+
+  jumlahStepAktif = (countPreset <= MAX_PLAN_STEPS) ? countPreset : MAX_PLAN_STEPS;
   for (int i = 0; i < jumlahStepAktif; i++) {
-    ruteAktif[i] = RUTE_DEFAULT_AC[i];
+    ruteAktif[i] = srcPreset[i];
     if (ruteAktif[i].trigger == TRIG_ENCODER_JARAK) {
       ruteAktif[i].pauseMs = (uint16_t)constrain((long)runtimeJedaStasiunMs, 0L, 60000L);
     }
   }
-  strncpy(namaRuteAktif, "DEFAULT_AC_LOOP", sizeof(namaRuteAktif) - 1);
+  strncpy(namaRuteAktif, nama, sizeof(namaRuteAktif) - 1);
   namaRuteAktif[sizeof(namaRuteAktif) - 1] = '\0';
+  return true;
+}
+
+// Muat preset default bawaan pabrik ke RAM (sesuai PILIHAN_RUTE_DEFAULT di Config.h)
+inline void muatRuteDefaultAC(bool resetParam = false) {
+  muatPresetRute(PILIHAN_RUTE_DEFAULT, resetParam);
 }
 
 // Cari indeks step awal rute pulang (U-Turn atau label PULANG_/PLG_, atau -1 bila tidak ada)

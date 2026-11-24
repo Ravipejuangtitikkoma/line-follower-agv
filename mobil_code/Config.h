@@ -179,6 +179,22 @@ const unsigned long LOCKOUT_PENGAMAN_SIMPANG_MS    = LOCKOUT_PENGAMAN_N6_MS; // 
 const int   MAX_PLAN_STEPS          = 28;    // Kapasitas maksimal langkah rute aktif (aman 1 halaman NVS ESP32)
 const float OFFSET_CROSS_SIMPANG_CM = 9.0f;  // Kompensasi jarak maju ~450ms saat melintasi simpang lurus sebelum ukur 50cm ke stasiun
 const bool  AUTO_START_SAAT_NYALA   = true;  // true = otomatis jalan 2s setelah boot (bisa dibatalkan via Serial)
+
+// ================= PILIHAN PRESET RUTE DEFAULT (BISA DIGANTI DI SINI) =================
+// Anda bisa memilih rute default yang otomatis dimuat saat boot:
+//   RUTE_AC : START -> Gudang A -> Gudang C -> Pulang Loop -> START
+//   RUTE_AB : START -> Gudang A -> Gudang B -> Pulang Loop -> START
+//   RUTE_ED : START -> Gudang E -> Gudang D -> Pulang Loop -> START
+//   RUTE_BD : START -> Gudang B -> Gudang D -> Pulang Loop -> START
+enum PresetRuteId : uint8_t {
+  RUTE_AC = 0,
+  RUTE_AB = 1,
+  RUTE_ED = 2,
+  RUTE_BD = 3
+};
+
+// Ubah nilai di bawah ini untuk mengganti rute bawaan saat upload sketch:
+const PresetRuteId PILIHAN_RUTE_DEFAULT = RUTE_AC;
  
 // ================= PENGAMAN KALIBRASI AWAL & SIMPANG KANAN =================
 const int WAKTU_AUTO_ALIGN_MAX_MS          = 250; // Waktu maksimal kalibrasi mikro posisi awal di tempat (ms)
