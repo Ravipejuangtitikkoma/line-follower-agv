@@ -41,19 +41,13 @@ static float      errSebelumnyaPD       = 0.0f;
 static bool       sudahLepasGarisLama   = false;
 static bool       sudahAutoAlignStart   = false;
 static int        konfirmasiCabangKanan = 0;
-<<<<<<< HEAD
-static EncoderSnapshot encoderAwalFase          = {0, 0, 0};
-static bool            sudahLogModeEncoder      = false;
-static unsigned long   lastWarnEncoderMs        = 0;
-static bool            berhentiDiSimpangPengaman= false;
-static bool            uturnOffsetSelesai       = false;
-static unsigned long   waktuMulaiPutar180       = 0;
-=======
-static int        konfirmasiCabangKiri  = 0;
-static EncoderSnapshot encoderAwalFase     = {0, 0, 0};
-static bool            sudahLogModeEncoder = false;
-static unsigned long   lastWarnEncoderMs   = 0;
->>>>>>> 1868a04b114b68a11ba138ea28b8c4c4334c70be
+static int             konfirmasiCabangKiri      = 0;
+static EncoderSnapshot encoderAwalFase           = {0, 0, 0};
+static bool            sudahLogModeEncoder       = false;
+static unsigned long   lastWarnEncoderMs         = 0;
+static bool            berhentiDiSimpangPengaman = false;
+static bool            uturnOffsetSelesai        = false;
+static unsigned long   waktuMulaiPutar180        = 0;
 
 inline long getDeltaTicksFase() {
   return bacaEncoderSnapshot().quadTicks - encoderAwalFase.quadTicks;
@@ -88,21 +82,12 @@ inline void gantiFase(StepPhase faseBaru, const char* alasan) {
   konfirmasiCabangKiri  = 0;
   sudahLepasGarisLama   = false;
 
-<<<<<<< HEAD
-  // Jangan matikan motor saat masuk PHASE_PRE_MOVE atau melintas simpang lurus tanpa jeda (N6/N10)
-  bool lintasiTanpaHenti = (faseBaru == PHASE_ACTION &&
-                            stepIdxSaatIni >= 0 && stepIdxSaatIni < JUMLAH_STEP_RUTE_REAL &&
-                            RUTE_REAL_PP[stepIdxSaatIni].action == ACT_CROSS_STRAIGHT &&
-                            RUTE_REAL_PP[stepIdxSaatIni].pauseMs == 0);
-  if (faseBaru != PHASE_PRE_MOVE && !lintasiTanpaHenti) {
-=======
   // Jangan matikan motor saat masuk PHASE_PRE_MOVE atau saat melintas lurus tanpa jeda (ACT_CROSS_STRAIGHT pause=0)
   bool lanjutTanpaRem = (faseBaru == PHASE_ACTION &&
                          stepIdxSaatIni >= 0 && stepIdxSaatIni < jumlahStepAktif &&
                          ruteAktif[stepIdxSaatIni].action == ACT_CROSS_STRAIGHT &&
                          ruteAktif[stepIdxSaatIni].pauseMs == 0);
   if (faseBaru != PHASE_PRE_MOVE && !lanjutTanpaRem) {
->>>>>>> 1868a04b114b68a11ba138ea28b8c4c4334c70be
     berhentiTotal();
   }
 
@@ -722,7 +707,8 @@ inline void cetakBantuanSerial() {
   Serial.println("     TRIG: LANGSUNG | TKIRI | CKANAN | CKIRI | S4 | ENC");
   Serial.println("     AKSI: KIRI | KIRI_P | KANAN | LURUS | JEDA | UTURN | STOP");
   Serial.println(" [3] KALIBRASI LIVE & SIMPAN PERMANEN KE FLASH ESP32:");
-  Serial.println("   SET_PPR <angka>          -> Ubah ticks/putaran roda (default 330)");
+  Serial.println("   KALIBRASI_50CM / SIMPAN_50CM -> Kalibrasi PPR mudah (dorong 50cm) -> NVS");
+  Serial.println("   SET_PPR <angka>              -> Setel & simpan permanen PPR ke NVS");
   Serial.println("   SET_JEDA <ms>            -> Ubah jeda berhenti di stasiun (default 3000)");
   Serial.println("   SET_AUTOSTART <0|1>      -> 1=auto jalan saat nyala, 0=tunggu START");
   Serial.println("   MAP_SAVE                 -> SIMPAN PERMANEN mapping & kalibrasi ke Flash");
@@ -735,16 +721,6 @@ inline void cetakBantuanSerial() {
 
 // Inisialisasi Plan Engine
 inline void initNavigationFSM() {
-<<<<<<< HEAD
-  statusMisiSaatIni         = MISI_JALAN_RUTE_REAL;
-  stepIdxSaatIni            = 0;
-  faseSaatIni               = PHASE_FOLLOW;
-  waktuMasukFase            = millis();
-  sudahLepasGarisLama       = false;
-  sudahAutoAlignStart       = false;
-  konfirmasiCabangKanan     = 0;
-  errSebelumnyaPD           = 0.0f;
-=======
   if (jumlahStepAktif <= 0) {
     muatRuteDefaultAC(false);
   }
@@ -757,7 +733,6 @@ inline void initNavigationFSM() {
   konfirmasiCabangKanan = 0;
   konfirmasiCabangKiri  = 0;
   errSebelumnyaPD       = 0.0f;
->>>>>>> 1868a04b114b68a11ba138ea28b8c4c4334c70be
   resetEncoderTicks();
   encoderAwalFase           = {0, 0, 0};
   sudahLogModeEncoder       = false;
@@ -766,15 +741,11 @@ inline void initNavigationFSM() {
   uturnOffsetSelesai        = false;
   waktuMulaiPutar180        = 0;
   resetWingTimestamps();
-<<<<<<< HEAD
-  Serial.println("[PLAN ENGINE] Rute: START -> N0(Kiri) -> N2(Kanan) -> A(50cm, 3s) -> N6 -> N10 -> C(40cm, 3s) -> Pulang.");
-=======
   Serial.print("[PLAN ENGINE] Rute Aktif: ");
   Serial.print(namaRuteAktif);
   Serial.print(" (");
   Serial.print(jumlahStepAktif);
   Serial.println(" step) siap dijalankan.");
->>>>>>> 1868a04b114b68a11ba138ea28b8c4c4334c70be
 }
 
 // Parser Perintah Operator (Serial Monitor / Paket LoRa)
@@ -808,9 +779,13 @@ inline void prosesPerintah(String cmd) {
     if (idxUTurn >= 0) {
       statusMisiSaatIni = MISI_JALAN_RUTE_REAL;
       stepIdxSaatIni    = idxUTurn;
-      gantiFase(PHASE_ACTION, "Perintah Operator PULANG (Mulai U-Turn & Rute Pulang)");
+      if (ruteAktif[idxUTurn].action == ACT_UTURN_180) {
+        gantiFase(PHASE_ACTION, "Perintah Operator PULANG (Mulai U-Turn & Rute Pulang)");
+      } else {
+        gantiFase(PHASE_FOLLOW, "Perintah Operator PULANG (Mulai Rute Pulang Loop)");
+      }
     } else {
-      Serial.println("[INFO] Rute aktif saat ini tidak memiliki step U-Turn pulang (ketik 'RUTE A,C' untuk PP).");
+      Serial.println("[INFO] Rute aktif saat ini tidak memiliki step pulang (ketik 'MAP_DEFAULT' atau 'RUTE A,C' untuk PP).");
     }
   }
   else if (cmd == "STOP" || cmd == "ESTOP" || cmd == "0" || cmd == "CMD:STOP") {
@@ -978,14 +953,11 @@ inline void prosesPerintah(String cmd) {
   }
   else if (cmd.startsWith("SET_PPR ")) {
     float ppr = cmd.substring(8).toFloat();
-    if (ppr <= 1.0f) {
-      Serial.println("[ERROR] Nilai PPR harus > 1 (contoh: SET_PPR 220)");
-      return;
+    if (simpanKalibrasiEncoderNVS(ppr)) {
+      Serial.print(">>> [SET_PPR] PPR encoder diatur & disimpan ke NVS: ");
+      Serial.print(runtimeTicksPerPutaran, 1);
+      Serial.println(" ticks/putaran (ketik 'MAP_SAVE' untuk simpan ke mapping Flash).");
     }
-    runtimeTicksPerPutaran = ppr;
-    Serial.print(">>> [SET_PPR] PPR encoder diatur ke ");
-    Serial.print(runtimeTicksPerPutaran, 1);
-    Serial.println(" ticks/putaran (ketik 'MAP_SAVE' untuk simpan permanen).");
   }
   else if (cmd.startsWith("SET_JEDA ")) {
     long jeda = constrain(cmd.substring(9).toInt(), 0L, 60000L);
@@ -1020,7 +992,7 @@ inline void prosesPerintah(String cmd) {
     sudahLogModeEncoder = false;
     Serial.println("\n>>> [KALIBRASI ENCODER RODA KIRI (5 DETIK)]");
     Serial.print("PPR aktif: ");
-    Serial.print(encoderTicksPerPutaran, 1);
+    Serial.print(runtimeTicksPerPutaran, 1);
     Serial.println(encoderSudahKalibrasiNVS ? " (NVS Tersimpan)" : " (Default Belum Kalibrasi)");
     Serial.println("Putar roda kiri 1 putaran penuh atau dorong robot 50 cm untuk cek nilai ticks...");
     for (int i = 0; i < 20; i++) {
@@ -1037,12 +1009,7 @@ inline void prosesPerintah(String cmd) {
       Serial.print(ticksKeCm((long)ef), 2);
       Serial.println(" cm");
     }
-<<<<<<< HEAD
-    Serial.println(">>> [SELESAI] Gunakan 'SET_PPR <nilai>' atau 'KALIBRASI_50CM' untuk simpan permanen ke NVS.\n");
-  }
-  else if (cmd.startsWith("SET_PPR ")) {
-    float pprBaru = cmd.substring(8).toFloat();
-    simpanKalibrasiEncoderNVS(pprBaru);
+    Serial.println(">>> [SELESAI] Gunakan 'SET_PPR <nilai>' / 'KALIBRASI_50CM' (-> NVS), atau 'MAP_SAVE'!\n");
   }
   else if (cmd == "KALIBRASI_50CM") {
     statusMisiSaatIni = MISI_STANDBY;
@@ -1069,9 +1036,6 @@ inline void prosesPerintah(String cmd) {
       Serial.println(pprHitung, 1);
       simpanKalibrasiEncoderNVS(pprHitung);
     }
-=======
-    Serial.println(">>> [SELESAI] Ubah langsung pakai 'SET_PPR <ticks>' lalu 'MAP_SAVE'!\n");
->>>>>>> 1868a04b114b68a11ba138ea28b8c4c4334c70be
   }
   else if (cmd == "STATUS") {
     const char* label = (stepIdxSaatIni >= 0 && stepIdxSaatIni < jumlahStepAktif)
@@ -1082,11 +1046,7 @@ inline void prosesPerintah(String cmd) {
     Serial.print("Misi: ");
     switch (statusMisiSaatIni) {
       case MISI_STANDBY:          Serial.println("STANDBY"); break;
-<<<<<<< HEAD
-      case MISI_JALAN_RUTE_REAL:  Serial.println("JALAN RUTE REAL (START -> N0 -> N2 -> A -> N6 -> N10 -> C -> START)"); break;
-=======
       case MISI_JALAN_RUTE_REAL:  Serial.println("JALAN RUTE AKTIF"); break;
->>>>>>> 1868a04b114b68a11ba138ea28b8c4c4334c70be
       case MISI_EMERGENCY_STOP:   Serial.println("EMERGENCY STOP"); break;
     }
     Serial.print("Step: ");
@@ -1098,7 +1058,7 @@ inline void prosesPerintah(String cmd) {
     Serial.print(") | Fase: ");
     Serial.println(namaFase(faseSaatIni));
     Serial.print("Kalibrasi PPR: ");
-    Serial.print(encoderTicksPerPutaran, 1);
+    Serial.print(runtimeTicksPerPutaran, 1);
     Serial.println(encoderSudahKalibrasiNVS ? " (Tersimpan di NVS)" : " (DEFAULT - Belum dikalibrasi!)");
     EncoderSnapshot kini = bacaEncoderSnapshot();
     bool pakaiAOnly = false, pakaiBCad = false;
@@ -1301,24 +1261,39 @@ inline void updateNavigationFSM(const LineData& line) {
           eksekusiAksiLintasLurus(line, durasiDiFase);
           break;
 
-<<<<<<< HEAD
-        case ACT_PAUSE_ONLY:
-          if (stepIdxSaatIni == IDX_STEP_CHECKPOINT_A && berhentiDiSimpangPengaman) {
-            // Pengaman N6 sempat menghentikan robot tepat di garis N6:
-            // langsung lewati N6 (PHASE_ACTION) agar referensi N10 tetap sinkron.
-            stepIdxSaatIni            = IDX_STEP_LEWAT_N6;
-            berhentiDiSimpangPengaman = false;
-            gantiFase(PHASE_ACTION, "Pengaman N6 Terpicu -> Langsung Melintasi N6 menuju N10");
-          } else if (stepIdxSaatIni == IDX_STEP_CHECKPOINT_C && !OTOMATIS_PULANG_SETELAH_C) {
-=======
         case ACT_PAUSE_ONLY: {
-          bool stepBerikutnyaUTurn = (stepIdxSaatIni + 1 < jumlahStepAktif) &&
-                                     (ruteAktif[stepIdxSaatIni + 1].action == ACT_UTURN_180);
-          if (stepBerikutnyaUTurn && !runtimePulangOtomatis) {
->>>>>>> 1868a04b114b68a11ba138ea28b8c4c4334c70be
+          bool adaStepBerikutnya         = (stepIdxSaatIni + 1 < jumlahStepAktif);
+          StepAction aksiBerikutnya      = adaStepBerikutnya ? ruteAktif[stepIdxSaatIni + 1].action : ACT_STOP_MISSION;
+          bool stepBerikutnyaLintasLurus = adaStepBerikutnya &&
+                                           (aksiBerikutnya == ACT_CROSS_STRAIGHT) &&
+                                           (ruteAktif[stepIdxSaatIni + 1].pauseMs == 0);
+          bool stepBerikutnyaBelok       = adaStepBerikutnya &&
+                                           (aksiBerikutnya == ACT_TURN_RIGHT ||
+                                            aksiBerikutnya == ACT_TURN_LEFT ||
+                                            aksiBerikutnya == ACT_TURN_LEFT_PULANG);
+          bool stepBerikutnyaPulang      = adaStepBerikutnya &&
+                                           (aksiBerikutnya == ACT_UTURN_180 ||
+                                            strncmp(ruteAktif[stepIdxSaatIni + 1].label, "PULANG_", 7) == 0);
+
+          if (stepBerikutnyaPulang && !runtimePulangOtomatis) {
             berhentiTotal();
             statusMisiSaatIni = MISI_STANDBY;
             Serial.println(">>> [TUJUAN SELESAI] Jeda stasiun selesai. Robot STANDBY (ketik 'PULANG' untuk kembali ke START).");
+          } else if (berhentiDiSimpangPengaman && stepBerikutnyaLintasLurus) {
+            // Pengaman simpang sempat menghentikan robot tepat di garis simpang berikutnya (misal N6):
+            // langsung jalankan PHASE_ACTION step lintasi-lurus berikutnya agar referensi tetap sinkron.
+            stepIdxSaatIni++;
+            berhentiDiSimpangPengaman = false;
+            gantiFase(PHASE_ACTION, "Pengaman Simpang Terpicu -> Langsung Melintasi Simpang Berikutnya");
+          } else if (berhentiDiSimpangPengaman && stepBerikutnyaBelok) {
+            // Pengaman simpang menghentikan robot tepat di simpang belok berikutnya (misal N14):
+            // lewati PHASE_FOLLOW step belok agar tidak bablas melewati ujung N14 saat lockout.
+            stepIdxSaatIni++;
+            berhentiDiSimpangPengaman = false;
+            gantiFase(PHASE_PRE_MOVE, "Pengaman Simpang Terpicu -> Langsung Pre-Move Belok di Simpang");
+            if (!ruteAktif[stepIdxSaatIni].preMoveUsePD) {
+              prosesFasePreMove(ruteAktif[stepIdxSaatIni], line, 0);
+            }
           } else {
             majuKeStepBerikutnya("Jeda Parkir Selesai -> Lanjut Step Berikutnya");
           }

@@ -76,14 +76,9 @@ static volatile unsigned long encoderPulseB = 0;
 static volatile int64_t       lastIsrAUs    = 0;
 static volatile int64_t       lastIsrBUs    = 0;
 static portMUX_TYPE           encoderMux    = portMUX_INITIALIZER_UNLOCKED;
-<<<<<<< HEAD
-static float encoderTicksPerPutaran         = ENCODER_TICKS_PER_PUTARAN;
-static bool  encoderSudahKalibrasiNVS       = false;
-=======
-
-// Parameter kalibrasi encoder runtime (dapat diubah live via Serial SET_PPR & disimpan ke Flash NVS)
-static float runtimeTicksPerPutaran = ENCODER_TICKS_PER_PUTARAN;
->>>>>>> 1868a04b114b68a11ba138ea28b8c4c4334c70be
+// Parameter kalibrasi encoder runtime (dapat diubah live via Serial SET_PPR / KALIBRASI_50CM & disimpan ke Flash NVS)
+static float runtimeTicksPerPutaran   = ENCODER_TICKS_PER_PUTARAN;
+static bool  encoderSudahKalibrasiNVS = false;
 static float jarakValidTerakhir   = 999.0;
 static float jarakSaatIni         = 999.0;
 static bool statusHalangan        = false;
@@ -194,20 +189,14 @@ inline unsigned long hitungPulsaEfektif(const EncoderSnapshot& awal,
 // Konversi selisih pulsa encoder (deltaTicks) ke jarak tempuh dalam cm.
 // Menggunakan labs() agar kebal terhadap perbedaan polaritas kabel Fase A/B saat roda maju.
 inline float ticksKeCm(long deltaTicks) {
-<<<<<<< HEAD
-  if (encoderTicksPerPutaran <= 0.0f) return 0.0f;
-  return ((float)labs(deltaTicks) / encoderTicksPerPutaran) * KELILING_RODA_CM;
-=======
   if (runtimeTicksPerPutaran <= 0.0f) return 0.0f;
   return ((float)labs(deltaTicks) / runtimeTicksPerPutaran) * KELILING_RODA_CM;
->>>>>>> 1868a04b114b68a11ba138ea28b8c4c4334c70be
 }
 
 // Konversi target jarak (cm) ke perkiraan jumlah pulsa encoder (ticks)
 inline long cmKeTicks(float cm) {
   if (KELILING_RODA_CM <= 0.0f) return 0;
-<<<<<<< HEAD
-  return (long)((cm / KELILING_RODA_CM) * encoderTicksPerPutaran + 0.5f);
+  return (long)((cm / KELILING_RODA_CM) * runtimeTicksPerPutaran + 0.5f);
 }
 
 // Muat nilai kalibrasi PPR encoder dari NVS ESP32 ("agv_cfg" / "enc_ppr")
@@ -217,15 +206,15 @@ inline void loadKalibrasiEncoderNVS() {
     float ppr = prefs.getFloat("enc_ppr", -1.0f);
     prefs.end();
     if (ppr >= 10.0f && ppr <= 5000.0f) {
-      encoderTicksPerPutaran  = ppr;
+      runtimeTicksPerPutaran   = ppr;
       encoderSudahKalibrasiNVS = true;
       Serial.print(F("[NVS] Kalibrasi encoder dimuat: "));
-      Serial.print(encoderTicksPerPutaran, 1);
+      Serial.print(runtimeTicksPerPutaran, 1);
       Serial.println(F(" ticks/putaran"));
       return;
     }
   }
-  encoderTicksPerPutaran  = ENCODER_TICKS_PER_PUTARAN;
+  runtimeTicksPerPutaran   = ENCODER_TICKS_PER_PUTARAN;
   encoderSudahKalibrasiNVS = false;
 }
 
@@ -235,7 +224,7 @@ inline bool simpanKalibrasiEncoderNVS(float pprBaru) {
     Serial.println(F("[ERROR] Nilai PPR harus di rentang 10.0 - 5000.0!"));
     return false;
   }
-  encoderTicksPerPutaran  = pprBaru;
+  runtimeTicksPerPutaran   = pprBaru;
   encoderSudahKalibrasiNVS = true;
   Preferences prefs;
   if (prefs.begin("agv_cfg", false)) {
@@ -243,11 +232,8 @@ inline bool simpanKalibrasiEncoderNVS(float pprBaru) {
     prefs.end();
   }
   Serial.print(F("[NVS TERSIMPAN] ENCODER_TICKS_PER_PUTARAN = "));
-  Serial.println(encoderTicksPerPutaran, 1);
+  Serial.println(runtimeTicksPerPutaran, 1);
   return true;
-=======
-  return (long)((cm / KELILING_RODA_CM) * runtimeTicksPerPutaran + 0.5f);
->>>>>>> 1868a04b114b68a11ba138ea28b8c4c4334c70be
 }
 
 // Inisialisasi Seluruh Sensor

@@ -171,19 +171,14 @@ const bool          GUNAKAN_FALLBACK_WAKTU_ENCODER = true;  // Otomatis pakai es
 const float         KECEPATAN_ESTIMASI_CM_PER_S    = 20.8f; // Estimasi kecepatan maju (cm/detik) pada KEC_BASE = 58
 const unsigned long WAKTU_DETEKSI_ENCODER_MATI_MS  = 600;   // Jika 600ms berjalan pulsa masih 0, aktifkan fallback waktu
 const unsigned long TIMEOUT_ENCODER_A_MS           = 3500;  // Batas waktu maksimal ruas N2 -> A (~73 cm) agar tidak bablas
-<<<<<<< HEAD
 const unsigned long TIMEOUT_ENCODER_C_MS           = 3500;  // Batas waktu maksimal ruas N10 -> C (~40 cm) agar aman sebelum N14
 const unsigned long LOCKOUT_PENGAMAN_N6_MS         = 600;   // Abaikan garis awal selama 600ms sebelum pengaman simpang aktif
 const unsigned long LOCKOUT_PENGAMAN_SIMPANG_MS    = LOCKOUT_PENGAMAN_N6_MS; // Alias pengaman simpang N6 (Step 2) & N14 (Step 5)
-=======
-const unsigned long TIMEOUT_ENCODER_C_MS           = 12000; // Batas waktu maksimal ruas A -> C (~250 cm) agar tidak bablas
-const unsigned long LOCKOUT_PENGAMAN_N6_MS         = 600;   // Abaikan garis N2 selama 600ms awal sebelum pengaman simpang N6 aktif
 
 // ================= PARAMETER MAPPING DINAMIS & FLASH ESP32 (NVS) =================
 const int   MAX_PLAN_STEPS          = 28;    // Kapasitas maksimal langkah rute aktif (aman 1 halaman NVS ESP32)
 const float OFFSET_CROSS_SIMPANG_CM = 9.0f;  // Kompensasi jarak maju ~450ms saat melintasi simpang lurus sebelum ukur 50cm ke stasiun
 const bool  AUTO_START_SAAT_NYALA   = true;  // true = otomatis jalan 2s setelah boot (bisa dibatalkan via Serial)
->>>>>>> 1868a04b114b68a11ba138ea28b8c4c4334c70be
  
 // ================= PENGAMAN KALIBRASI AWAL & SIMPANG KANAN =================
 const int WAKTU_AUTO_ALIGN_MAX_MS          = 250; // Waktu maksimal kalibrasi mikro posisi awal di tempat (ms)

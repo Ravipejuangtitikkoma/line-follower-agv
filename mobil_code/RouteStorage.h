@@ -15,7 +15,7 @@
 // ====================================================================
 
 const uint32_t ROUTE_STORAGE_MAGIC   = 0x41475632UL; // "AGV2"
-const uint16_t ROUTE_STORAGE_VERSION = 1;
+const uint16_t ROUTE_STORAGE_VERSION = 2;
 
 struct RouteStorageBlob {
   uint32_t      magic;

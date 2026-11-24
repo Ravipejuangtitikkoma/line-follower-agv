@@ -31,14 +31,9 @@ void setup() {
 
   Serial.println("\n=======================================================");
   Serial.println("   AGV ROBOT: HIERARCHICAL FINITE STATE MACHINE (HFSM) ");
-<<<<<<< HEAD
-  Serial.println("   Misi: START -> N0 Kiri -> N2 Kanan -> Checkpoint A  ");
-  Serial.println("         (50cm, 3s) -> N6 -> N10 -> Checkpoint C       ");
-  Serial.println("         (40cm, 3s) -> U-Turn 180° -> Pulang ke START  ");
-=======
-  Serial.println("   Mapping Dinamis via Serial Monitor + Flash NVS      ");
->>>>>>> 1868a04b114b68a11ba138ea28b8c4c4334c70be
-  Serial.println("   Board: Mappi32 (ESP32)                              ");
+  Serial.println("   Rute Default Loop: START -> N0 -> N2 -> A -> N6 -> N10 -> C");
+  Serial.println("                      -> N14 -> N15 -> N11 -> N7 -> N3 -> N0 -> START");
+  Serial.println("   Mapping Dinamis Serial + Flash NVS | Board: Mappi32 (ESP32)");
   Serial.println("=======================================================");
 
   // Inisialisasi Perangkat Keras & Muat Mapping Tersimpan dari Flash
@@ -54,29 +49,11 @@ void setup() {
   }
   if (!encoderSudahKalibrasiNVS) {
     Serial.print(F("[PERINGATAN KALIBRASI] PPR Encoder masih memakai nilai default ("));
-    Serial.print(encoderTicksPerPutaran, 1);
+    Serial.print(runtimeTicksPerPutaran, 1);
     Serial.println(F(")!"));
     Serial.println(F("  -> Sebelum tes rute penuh, sangat disarankan jalankan 'KALIBRASI_50CM' atau 'SET_PPR <nilai>'!"));
   }
 
-<<<<<<< HEAD
-  Serial.println("\n[PANDUAN OPERATOR SERIAL MONITOR / LORA]:");
-  Serial.println("  Ketik 'START'             -> Mulai Misi Penuh (START -> A -> C -> START)");
-  Serial.println("  Ketik 'LANJUT'            -> Bypass jeda 3 detik di Checkpoint A / C");
-  Serial.println("  Ketik 'PULANG'            -> Mulai Putar Balik Pulang ke START (dari C)");
-  Serial.println("  Ketik 'STOP'              -> Rem Darurat (E-Stop)");
-  Serial.println("  Ketik 'RESET'             -> Reset State Navigasi & Encoder ke Awal");
-  Serial.println("  Ketik 'STATUS'            -> Lihat Status Lengkap Misi, State & Encoder");
-  Serial.println("  Ketik 'KALIBRASI_50CM'    -> Kalibrasi PPR mudah (dorong 50 cm, lalu ketik SIMPAN_50CM)");
-  Serial.println("  Ketik 'SET_PPR <nilai>'   -> Setel & simpan permanen nilai PPR ke NVS ESP32");
-  Serial.println("  Ketik 'TEST_ENCODER'      -> Cek pulsa encoder roda kiri (5 detik, live ticks/cm)");
-  Serial.println("  Ketik 'RESET_ENC'         -> Nolkan Hitungan Pulsa Encoder");
-  Serial.println("  Ketik 'TEST_RODA'         -> Diagnostik 4 Arah Roda (Maju/Mundur Tiap Sisi)");
-  Serial.println("  Ketik 'TEST_KANAN'        -> Diagnostik Putar Poros Kanan (2 Detik)");
-  Serial.println("  Ketik 'TEST_MUNDUR_KANAN' -> Diagnostik Driver Kanan Mundur (Pin 17 / LPWM)");
-  Serial.println("\n[INFO] Mobil otomatis memulai Misi dalam 2 detik...\n");
-  delay(2000);
-=======
   cetakBantuanSerial();
 
   if (runtimeAutoStart) {
@@ -94,7 +71,6 @@ void setup() {
   } else {
     Serial.println("\n[INFO] Mode AUTOSTART = OFF (STANDBY). Ketik 'START' untuk mulai atau 'HELP' untuk panduan.\n");
   }
->>>>>>> 1868a04b114b68a11ba138ea28b8c4c4334c70be
 }
 
 void loop() {
