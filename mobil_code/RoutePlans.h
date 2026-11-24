@@ -64,18 +64,18 @@ const int IDX_STEP_UTURN_B      = IDX_STEP_PULANG_MULAI;
 // ====================================================================
 const PlanStep RUTE_DEFAULT_AC[] = {
   // label,               trigger,             lockout,                    targetCm,         maxDurMs,             stopNode, preMove,                     usePD, brkPwm, brkMs, pause,                    action
-  { "N0_BELOK_KIRI",      TRIG_T_KIRI,         250,                        0.0f,             0,                    false,    OFFSET_MAJU_BELOK_MS,        false, 85,     35,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_LEFT        }, // 0
-  { "N2_BELOK_KANAN",     TRIG_CABANG_KANAN,   WAKTU_MINIMAL_RUAS2_MS,     0.0f,             0,                    false,    OFFSET_MAJU_SIMPANG_KANAN_MS,false, 85,     35,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_RIGHT       }, // 1
+  { "N0_BELOK_KIRI",      TRIG_T_KIRI,         250,                        0.0f,             0,                    false,    OFFSET_MAJU_BELOK_MS,        false, 105,    45,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_LEFT        }, // 0
+  { "N2_BELOK_KANAN",     TRIG_CABANG_KANAN,   WAKTU_MINIMAL_RUAS2_MS,     0.0f,             0,                    false,    OFFSET_MAJU_SIMPANG_KANAN_MS,false, 105,    45,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_RIGHT       }, // 1
   { "CHECKPOINT_A",       TRIG_ENCODER_JARAK,  100,                        JARAK_N2_KE_A_CM, TIMEOUT_ENCODER_A_MS, true,     0,                           false, 85,     35,    DURASI_JEDA_TITIK_A_MS,   ACT_PAUSE_ONLY       }, // 2
   { "LEWAT_N6",           TRIG_PEREMPATAN,     250,                        0.0f,             0,                    false,    0,                           false, 0,      0,     0,                        ACT_CROSS_STRAIGHT   }, // 3
   { "LEWAT_N10",          TRIG_PEREMPATAN,     400,                        0.0f,             0,                    false,    0,                           false, 0,      0,     0,                        ACT_CROSS_STRAIGHT   }, // 4
   { "CHECKPOINT_C",       TRIG_ENCODER_JARAK,  100,                        JARAK_N10_KE_C_CM,TIMEOUT_ENCODER_C_MS, true,     0,                           false, 85,     35,    DURASI_JEDA_TITIK_C_MS,   ACT_PAUSE_ONLY       }, // 5
-  { "PULANG_N14_KANAN",   TRIG_PEREMPATAN,     250,                        0.0f,             0,                    false,    OFFSET_MAJU_SIMPANG_KANAN_MS,false, 85,     35,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_RIGHT       }, // 6
-  { "PULANG_N15_KANAN",   TRIG_CABANG_KANAN,   400,                        0.0f,             0,                    false,    OFFSET_MAJU_SIMPANG_KANAN_MS,false, 85,     35,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_RIGHT       }, // 7
+  { "PULANG_N14_KANAN",   TRIG_PEREMPATAN,     250,                        0.0f,             0,                    false,    OFFSET_MAJU_SIMPANG_KANAN_MS,false, 105,    45,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_RIGHT       }, // 6
+  { "PULANG_N15_KANAN",   TRIG_CABANG_KANAN,   400,                        0.0f,             0,                    false,    OFFSET_MAJU_SIMPANG_KANAN_MS,false, 105,    45,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_RIGHT       }, // 7
   { "PULANG_N11",         TRIG_PEREMPATAN,     400,                        0.0f,             0,                    false,    0,                           false, 0,      0,     0,                        ACT_CROSS_STRAIGHT   }, // 8
   { "PULANG_N7",          TRIG_PEREMPATAN,     400,                        0.0f,             0,                    false,    0,                           false, 0,      0,     0,                        ACT_CROSS_STRAIGHT   }, // 9
-  { "PULANG_N3_KANAN",    TRIG_PEREMPATAN,     400,                        0.0f,             0,                    false,    OFFSET_MAJU_SIMPANG_KANAN_MS,false, 85,     35,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_RIGHT       }, // 10
-  { "PULANG_N0_KIRI",     TRIG_CABANG_KIRI,    WAKTU_MINIMAL_RUAS2_MS,     0.0f,             0,                    false,    OFFSET_MAJU_BELOK_MS,        false, 85,     35,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_LEFT_PULANG }, // 11
+  { "PULANG_N3_KANAN",    TRIG_PEREMPATAN,     400,                        0.0f,             0,                    false,    OFFSET_MAJU_SIMPANG_KANAN_MS,false, 105,    45,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_RIGHT       }, // 10
+  { "PULANG_N0_KIRI",     TRIG_CABANG_KIRI,    WAKTU_MINIMAL_RUAS2_MS,     0.0f,             0,                    false,    OFFSET_MAJU_BELOK_MS,        false, 105,    45,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_LEFT_PULANG }, // 11
   { "FINISH_START",       TRIG_PEREMPATAN,     350,                        0.0f,             0,                    false,    0,                           false, 85,     35,    50,                       ACT_STOP_MISSION     }  // 12
 };
 

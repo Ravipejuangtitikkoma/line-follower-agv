@@ -66,12 +66,12 @@ const int PWM_TEPI_MUNDUR            = 60;  // Torsi penahan (-60 PWM) saat gari
 
 // ================= PARAMETER PUTARAN 90 DERAJAT SEMPURNA =================
 // 1. Offset Maju Saat Deteksi Simpang (Membawa As Roda ke Pusat Simpang)
-// Simpang 1 (Kiri): Garis melintang penuh di depan moncong
-const int OFFSET_MAJU_BELOK_MS         = 59;  // 59ms: Maju sedikit melewati garis sebelum belok kiri
+// Simpang 1 (Kiri): 0ms (rem seketika di pusat simpang sebelum belok kiri, samakan dengan belok kanan)
+const int OFFSET_MAJU_BELOK_MS         = 0;   // 0ms: Rem seketika sebelum belok kiri agar tidak bablas / menyerempet sudut kotak biru
 
-// Simpang 2 (Kanan): Garis lurus terus ke depan, cabang 90° di samping kanan
-// Maju singkat 59ms (identik dengan belok kiri) agar sensor melangkahi garis sebelum mulai putar poros
-const int OFFSET_MAJU_SIMPANG_KANAN_MS = 59;  // 59ms: Maju sedikit identik Simpang 1
+// Simpang 2 (Kanan): 0ms (tanpa maju melewati simpang) agar tidak menyerempet kotak biru A/D di N2/N15
+// dan tidak bablas keluar garis ujung T di N14/N3
+const int OFFSET_MAJU_SIMPANG_KANAN_MS = 0;   // 0ms: Rem seketika di pusat simpang sebelum belok kanan
 const int DURASI_MAJU_POROS_CABANG_MS  = OFFSET_MAJU_SIMPANG_KANAN_MS;
 const int KEC_MAJU_OFFSET              = 58;  // Kecepatan maju presisi dasar
 const int KEC_MAJU_OFFSET_KIRI         = 78;  // Kecepatan maju offset roda kiri (dengan trim kiri)
@@ -85,8 +85,8 @@ const int JEDA_DIEM_SIMPANG_MS = 80;
 const int KEC_BELOK_KANAN_MAJU          = 166; // Ditingkatkan (dari 148) untuk mengatasi grip tinggi ban karet putih
 const int KEC_BELOK_KANAN_MUNDUR        = 166; // Ditingkatkan (dari 153) agar roda kanan aktif memutar penuh
 const int KEC_BELOK_KANAN_CARI          = 142; // Ditingkatkan (dari 130) agar tidak stall saat mendekati garis target
-const int WAKTU_ABAIKAN_SENSOR_KANAN_MS = 200; // Abaikan sensor 200ms: bodi wajib putar >35° dulu agar tidak mengunci garis lama!
-const int WAKTU_LEPAS_SUDUT_MIN_MS      = 260; // Timeout pengaman Fase A: jika kardus tidak sepenuhnya putih, lepas sudut setelah 260ms (~40°) 
+const int WAKTU_ABAIKAN_SENSOR_KANAN_MS = 300; // Abaikan sensor 300ms (~55°-65°): melewati sudut kotak biru A/D sebelum scan garis 90°
+const int WAKTU_LEPAS_SUDUT_MIN_MS      = 320; // Timeout pengaman Fase A sedikit di atas blind window
 
 // Belok Kiri:
 const int KEC_BELOK_KIRI_MAJU    = 158; // Ditingkatkan (dari 134) mengatasi hambatan putar ban karet baru
@@ -97,7 +97,7 @@ const int PWM_BREAKAWAY_KICK           = 205; // Entakan torsi kuat agar roda ki
 const int PWM_BREAKAWAY_KANAN_KICK     = 195; // Entakan awal belok kanan untuk ban karet high-grip
 const int DURASI_BREAKAWAY_KICK_MS     = 40;  // Durasi sentakan 40ms mendobrak friksi statis awal ban karet
 const int DURASI_RAMP_MS               = 40;  // Durasi transisi awal disamakan dengan breakaway kick
-const int WAKTU_SWEEP_AWAL_MS          = 60;  // 60ms: Cepat buang bayangan garis lama agar siap tangkap garis baru (Belok Kiri)
+const int WAKTU_SWEEP_AWAL_MS          = 240; // 240ms (~45°-50°): Lepas bayangan garis lama/sudut kotak biru saat offset maju 0ms (Belok Kiri)
 
 // 5. Parameter Pelurusan Bodi Belakang Panjang 25 cm (Menarik Bodi Belakang 90° Penuh)
 const int DURASI_TAMBAHAN_BELAKANG_MS       = 200; 
