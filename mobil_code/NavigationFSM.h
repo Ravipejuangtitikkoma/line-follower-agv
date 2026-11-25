@@ -1318,7 +1318,8 @@ inline void updateNavigationFSM(const LineData& line) {
                                             aksiBerikutnya == ACT_TURN_LEFT_PULANG);
           bool stepBerikutnyaPulang      = adaStepBerikutnya &&
                                            (aksiBerikutnya == ACT_UTURN_180 ||
-                                            strncmp(ruteAktif[stepIdxSaatIni + 1].label, "PULANG_", 7) == 0);
+                                            strncmp(ruteAktif[stepIdxSaatIni + 1].label, "PULANG_", 7) == 0 ||
+                                            strncmp(ruteAktif[stepIdxSaatIni + 1].label, "PLG_", 4) == 0);
 
           if (stepBerikutnyaPulang && !runtimePulangOtomatis) {
             berhentiTotal();

@@ -152,9 +152,8 @@ inline bool cariJalurTerpendekGrid(int startNode,
       if (dOut == dIn) {
         turnCost = 0;
       } else if (((dIn + 2) % 4) == dOut) {
-        // U-turn 180° dihindari agar robot selalu memilih jalur loop maju (forward loop) di grid
-        if (!isNodeStasiun(u)) continue;
-        turnCost = 800; // Ditingkatkan sangat tinggi agar Dijkstra mengutamakan loop maju tanpa U-Turn
+        // U-turn 180° dinonaktifkan total: paksa jalur loop maju 90° agar stabil di arena
+        continue;
       } else {
         turnCost = 25;
       }
@@ -322,22 +321,19 @@ inline bool bangunRuteStasiun(const String& daftarRaw, bool pulangKeStart) {
       PlanStep st;
       char lbl[20];
       if (rel == 0) {
-        uint16_t pauseMs = (isPulangLeg && (u == ND_N10 || u == ND_N6)) ? DURASI_STOP_S4_PULANG_MS : 0;
-        uint8_t  brkPwm  = (pauseMs > 0) ? 85 : 0;
-        uint16_t brkMs   = (pauseMs > 0) ? 35 : 0;
         snprintf(lbl, sizeof(lbl), "%s_%s_LURUS", isPulangLeg ? "PLG" : "LTS", GRID_NODES[u].name);
-        st = buatPlanStep(lbl, trig, 350, 0.0f, 0, false, 0, false, brkPwm, brkMs, pauseMs, ACT_CROSS_STRAIGHT);
+        st = buatPlanStep(lbl, trig, 350, 0.0f, 0, false, 0, false, 0, 0, 0, ACT_CROSS_STRAIGHT);
       } else if (rel == 1) {
         uint16_t lock = (trig == TRIG_CABANG_KANAN) ? WAKTU_MINIMAL_RUAS2_MS : 250;
         snprintf(lbl, sizeof(lbl), "%s_%s_KANAN", isPulangLeg ? "PLG" : "GO", GRID_NODES[u].name);
         st = buatPlanStep(lbl, trig, lock, 0.0f, 0, false,
-                          OFFSET_MAJU_SIMPANG_KANAN_MS, false, 85, 35, JEDA_DIEM_SIMPANG_MS, ACT_TURN_RIGHT);
+                          OFFSET_MAJU_SIMPANG_KANAN_MS, false, 105, 45, JEDA_DIEM_SIMPANG_MS, ACT_TURN_RIGHT);
       } else { // rel == 3 (Kiri)
         StepAction act = isPulangLeg ? ACT_TURN_LEFT_PULANG : ACT_TURN_LEFT;
         uint16_t lock  = isPulangLeg ? 350 : 250;
         snprintf(lbl, sizeof(lbl), "%s_%s_KIRI", isPulangLeg ? "PLG" : "GO", GRID_NODES[u].name);
         st = buatPlanStep(lbl, trig, lock, 0.0f, 0, false,
-                          OFFSET_MAJU_BELOK_MS, false, 85, 35, JEDA_DIEM_SIMPANG_MS, act);
+                          OFFSET_MAJU_BELOK_MS, false, 105, 45, JEDA_DIEM_SIMPANG_MS, act);
       }
 
       if (!tambahStep(st)) {
@@ -392,13 +388,13 @@ inline bool bangunRuteStasiun(const String& daftarRaw, bool pulangKeStart) {
   jumlahStepAktif       = tempCount;
   runtimePulangOtomatis = pulangKeStart;
 
-  // Format nama rute (contoh: "RUTE_A_C_PP" atau "RUTE_B_1WAY")
+  // Format nama rute (contoh: "RUTE_A_C_LOOP" atau "RUTE_B_1WAY")
   String nama = "RUTE_";
   for (int i = 0; i < numTargets; i++) {
     if (i > 0) nama += "_";
     nama += hurufTargets[i];
   }
-  nama += pulangKeStart ? "_PP" : "_1WAY";
+  nama += pulangKeStart ? "_LOOP" : "_1WAY";
   strncpy(namaRuteAktif, nama.c_str(), sizeof(namaRuteAktif) - 1);
   namaRuteAktif[sizeof(namaRuteAktif) - 1] = '\0';
 
