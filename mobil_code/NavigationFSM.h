@@ -33,7 +33,7 @@ enum StepPhase : uint8_t {
 };
 
 // Variabel Global Plan Engine
-static MisiStatus statusMisiSaatIni     = MISI_JALAN_RUTE_REAL; // Default langsung jalan saat uji coba
+static MisiStatus statusMisiSaatIni     = MISI_STANDBY; // Default standby menunggu START / LoRa saat dinyalakan
 static int        stepIdxSaatIni        = 0;
 static StepPhase  faseSaatIni           = PHASE_FOLLOW;
 static unsigned long waktuMasukFase     = 0;
@@ -48,6 +48,13 @@ static unsigned long   lastWarnEncoderMs         = 0;
 static bool            berhentiDiSimpangPengaman = false;
 static bool            uturnOffsetSelesai        = false;
 static unsigned long   waktuMulaiPutar180        = 0;
+static bool            sedangDijedaMisi          = false;
+static unsigned long   waktuMulaiPause           = 0;
+
+inline void resetPauseMisi() {
+  sedangDijedaMisi = false;
+  waktuMulaiPause  = 0;
+}
 
 inline long getDeltaTicksFase() {
   return bacaEncoderSnapshot().quadTicks - encoderAwalFase.quadTicks;
@@ -458,15 +465,40 @@ inline void eksekusiAksiBelokKiri(const LineData& line, unsigned long durasiDiFa
   if (durasiDiFase < (unsigned long)DURASI_RAMP_MS) {
     putarPorosKiriHalus(kecMaju, kecMundur, DURASI_BREAKAWAY_KICK_MS, pwmKick);
   } else {
-    if (line.b4 == 1 && durasiDiFase >= (unsigned long)WAKTU_SWEEP_AWAL_MS) {
+    // Fase Radar: perlambat hanya setelah lepas sudut lama & garis target mendekat dari kiri (S1/S2)
+    if (sudahLepasGarisLama &&
+        durasiDiFase >= (unsigned long)WAKTU_SWEEP_AWAL_MS &&
+        (line.b1 == 1 || line.b2 == 1)) {
       putarPorosKiri(kecSesuaiMaju, kecSesuaiMundur);
     } else {
       putarPorosKiri(kecMaju, kecMundur);
     }
   }
 
-  if (durasiDiFase >= (unsigned long)WAKTU_SWEEP_AWAL_MS) {
-    if (line.isLurusBelokKiri() || (line.b3 == 1 && line.b4 == 1) || (line.b3 == 1 && line.b2 == 0)) {
+  // FASE A: Pastikan bodi benar-benar keluar dari bayangan garis lama & area kotak biru (totalAktif >= 4)
+  if (durasiDiFase < 440UL && line.totalAktif >= 4) {
+    // Sedang menyapu bidang kotak biru lebar -> jangan kunci tepi keluarnya! Wajib lewat ruang putih dulu
+    sudahLepasGarisLama = false;
+  } else if (!sudahLepasGarisLama) {
+    if ((durasiDiFase >= (unsigned long)WAKTU_SWEEP_AWAL_MS && (line.totalAktif == 0 || line.isGarisHilang)) ||
+        (durasiDiFase >= (unsigned long)(WAKTU_SWEEP_AWAL_MS + 80) && line.totalAktif < 4) ||
+        (durasiDiFase >= 440UL)) {
+      sudahLepasGarisLama = true;
+    }
+  }
+
+  // FASE B: Strict Clean Latch mengunci garis 90° di tengah sensor (b1 & b5 wajib 0)
+  if (sudahLepasGarisLama && durasiDiFase >= (unsigned long)WAKTU_SWEEP_AWAL_MS) {
+    bool garisKiriTengah = (line.b1 == 0 && line.b5 == 0) &&
+                           (line.isLurusBelokKiri() ||
+                            (line.b2 == 1 && line.b3 == 1 && line.b4 == 1) ||
+                            (line.b2 == 0 && line.b3 == 1 && line.b4 == 0));
+    if (garisKiriTengah) {
+      // Putar lanjutan terukur agar bodi 25cm genap 90° sebelum rem singkat
+      if (DURASI_FINISH_BELOK_MS > 0) {
+        putarPorosKiri(kecSesuaiMaju, kecSesuaiMundur);
+        delay(DURASI_FINISH_BELOK_MS);
+      }
       // Rem aktif lawan arah mematikan inersia putar tepat di 90° simetris
       putarPorosKanan(pwmRem, pwmRem);
       delay(DURASI_REM_BELOK_MS);
@@ -516,10 +548,14 @@ inline void eksekusiAksiBelokKanan(const LineData& line, unsigned long durasiDiF
     }
   }
 
-  // FASE A: Pastikan bodi keluar dari sudut garis lama minimal 200ms / timeout 260ms
-  if (!sudahLepasGarisLama) {
+  // FASE A: Pastikan bodi keluar dari sudut garis lama & area kotak biru (totalAktif >= 4)
+  if (durasiDiFase < 480UL && line.totalAktif >= 4) {
+    // Sedang menyapu bidang kotak biru lebar -> reset agar tidak mengunci tepi keluarnya!
+    sudahLepasGarisLama = false;
+  } else if (!sudahLepasGarisLama) {
     if ((durasiDiFase >= (unsigned long)WAKTU_ABAIKAN_SENSOR_KANAN_MS && (line.totalAktif == 0 || line.isGarisHilang)) ||
-        (durasiDiFase >= (unsigned long)WAKTU_LEPAS_SUDUT_MIN_MS)) {
+        (durasiDiFase >= (unsigned long)WAKTU_LEPAS_SUDUT_MIN_MS && line.totalAktif < 4) ||
+        (durasiDiFase >= 480UL)) {
       sudahLepasGarisLama = true;
     }
   }
@@ -527,6 +563,11 @@ inline void eksekusiAksiBelokKanan(const LineData& line, unsigned long durasiDiF
   // FASE B: Strict Binary Latch mengunci garis cabang 90°
   if (sudahLepasGarisLama && durasiDiFase >= (unsigned long)WAKTU_ABAIKAN_SENSOR_KANAN_MS) {
     if (line.isLurusBelokKanan()) {
+      // Putar lanjutan terukur agar bodi 25cm genap 90° sebelum rem singkat
+      if (DURASI_FINISH_BELOK_MS > 0) {
+        putarPorosKanan(KEC_BELOK_KANAN_CARI, KEC_BELOK_KANAN_CARI + 6);
+        delay(DURASI_FINISH_BELOK_MS);
+      }
       putarPorosKiri(150, 150);
       delay(DURASI_REM_BELOK_KANAN_MS);
       berhentiTotal();
@@ -744,6 +785,7 @@ inline void initNavigationFSM() {
   berhentiDiSimpangPengaman = false;
   uturnOffsetSelesai        = false;
   waktuMulaiPutar180        = 0;
+  resetPauseMisi();
   resetWingTimestamps();
   Serial.print("[PLAN ENGINE] Rute Aktif: ");
   Serial.print(namaRuteAktif);
@@ -765,6 +807,7 @@ inline void prosesPerintah(String cmd) {
       Serial.println("[ERROR] Tabel mapping masih kosong! Ketik 'RUTE A,C' atau 'MAP_DEFAULT' dulu.");
       return;
     }
+    resetPauseMisi();
     statusMisiSaatIni   = MISI_JALAN_RUTE_REAL;
     stepIdxSaatIni      = 0;
     sudahAutoAlignStart = false;
@@ -772,15 +815,37 @@ inline void prosesPerintah(String cmd) {
     gantiFase(PHASE_FOLLOW, "Perintah Operator START");
   }
   else if (cmd == "LANJUT" || cmd == "GO" || cmd == "NEXT") {
-    if (faseSaatIni == PHASE_PAUSE) {
+    if (statusMisiSaatIni == MISI_STANDBY && sedangDijedaMisi) {
+      unsigned long lamaPause = millis() - waktuMulaiPause;
+      waktuMasukFase         += lamaPause;
+      lastWarnEncoderMs      += lamaPause;
+      if (uturnOffsetSelesai) {
+        waktuMulaiPutar180   += lamaPause;
+      }
+      resetPauseMisi();
+      statusMisiSaatIni = MISI_JALAN_RUTE_REAL;
+
+      if (faseSaatIni == PHASE_PAUSE) {
+        gantiFase(PHASE_ACTION, "Perintah Operator LANJUT (Resume + Bypass Jeda Stasiun)");
+      } else {
+        Serial.print(">>> [LANJUT] Melanjutkan rute pada Step ");
+        Serial.print(stepIdxSaatIni);
+        Serial.print(" (Fase ");
+        Serial.print(namaFase(faseSaatIni));
+        Serial.println(").");
+      }
+    } else if (statusMisiSaatIni == MISI_JALAN_RUTE_REAL && faseSaatIni == PHASE_PAUSE) {
       gantiFase(PHASE_ACTION, "Perintah Operator LANJUT (Bypass jeda stasiun)");
+    } else if (statusMisiSaatIni == MISI_EMERGENCY_STOP) {
+      Serial.println("[INFO] Robot dalam status E-STOP. Ketik 'START' atau 'RESET' untuk memulai ulang.");
     } else {
-      Serial.println("[INFO] Perintah LANJUT diabaikan (Robot tidak sedang berada di fase jeda PAUSE).");
+      Serial.println("[INFO] Tidak ada rute yang sedang di-PAUSE. Ketik 'START' untuk memulai rute dari awal.");
     }
   }
   else if (cmd == "PULANG" || cmd == "BALIK" || cmd == "RETURN" || cmd == "CMD:HOME") {
     int idxUTurn = cariIdxStepUTurn();
     if (idxUTurn >= 0) {
+      resetPauseMisi();
       statusMisiSaatIni = MISI_JALAN_RUTE_REAL;
       stepIdxSaatIni    = idxUTurn;
       if (ruteAktif[idxUTurn].action == ACT_UTURN_180) {
@@ -793,14 +858,25 @@ inline void prosesPerintah(String cmd) {
     }
   }
   else if (cmd == "STOP" || cmd == "ESTOP" || cmd == "0" || cmd == "CMD:STOP") {
+    resetPauseMisi();
     statusMisiSaatIni = MISI_EMERGENCY_STOP;
     berhentiTotal();
     Serial.println(">>> [E-STOP] REM DARURAT DIAKTIFKAN!");
   }
   else if (cmd == "STANDBY" || cmd == "PAUSE") {
-    statusMisiSaatIni = MISI_STANDBY;
-    berhentiTotal();
-    Serial.println(">>> [STANDBY] Robot dijeda.");
+    if (statusMisiSaatIni == MISI_JALAN_RUTE_REAL) {
+      sedangDijedaMisi = true;
+      waktuMulaiPause  = millis();
+      statusMisiSaatIni = MISI_STANDBY;
+      berhentiTotal();
+      Serial.print(">>> [PAUSE/STANDBY] Robot berhenti sementara di Step ");
+      Serial.print(stepIdxSaatIni);
+      Serial.println(". Ketik 'LANJUT' untuk meneruskan atau 'PULANG' untuk kembali ke START.");
+    } else {
+      statusMisiSaatIni = MISI_STANDBY;
+      berhentiTotal();
+      Serial.println(">>> [STANDBY] Robot dalam posisi diam siap (ketik 'START' untuk mulai).");
+    }
   }
   else if (cmd == "RESET") {
     initNavigationFSM();
@@ -814,6 +890,7 @@ inline void prosesPerintah(String cmd) {
   }
   else if (cmd == "RUTE 1" || cmd == "RUTE_AC" || cmd == "RUTE AC") {
     if (bangunRuteStasiun("A,C", true)) {
+      resetPauseMisi();
       statusMisiSaatIni = MISI_STANDBY;
       berhentiTotal();
       stepIdxSaatIni = 0;
@@ -824,6 +901,7 @@ inline void prosesPerintah(String cmd) {
   }
   else if (cmd == "RUTE 2" || cmd == "RUTE_AB" || cmd == "RUTE AB") {
     if (bangunRuteStasiun("A,B", true)) {
+      resetPauseMisi();
       statusMisiSaatIni = MISI_STANDBY;
       berhentiTotal();
       stepIdxSaatIni = 0;
@@ -834,6 +912,7 @@ inline void prosesPerintah(String cmd) {
   }
   else if (cmd == "RUTE 3" || cmd == "RUTE_ED" || cmd == "RUTE ED") {
     if (bangunRuteStasiun("E,D", true)) {
+      resetPauseMisi();
       statusMisiSaatIni = MISI_STANDBY;
       berhentiTotal();
       stepIdxSaatIni = 0;
@@ -844,6 +923,7 @@ inline void prosesPerintah(String cmd) {
   }
   else if (cmd == "RUTE 4" || cmd == "RUTE_BD" || cmd == "RUTE BD") {
     if (bangunRuteStasiun("B,D", true)) {
+      resetPauseMisi();
       statusMisiSaatIni = MISI_STANDBY;
       berhentiTotal();
       stepIdxSaatIni = 0;
@@ -855,6 +935,7 @@ inline void prosesPerintah(String cmd) {
   else if (cmd.startsWith("RUTE ")) {
     String arg = cmd.substring(5);
     if (bangunRuteStasiun(arg, true)) {
+      resetPauseMisi();
       statusMisiSaatIni = MISI_STANDBY;
       berhentiTotal();
       stepIdxSaatIni = 0;
@@ -866,6 +947,7 @@ inline void prosesPerintah(String cmd) {
   else if (cmd.startsWith("RUTE_ONEWAY ")) {
     String arg = cmd.substring(12);
     if (bangunRuteStasiun(arg, false)) {
+      resetPauseMisi();
       statusMisiSaatIni = MISI_STANDBY;
       berhentiTotal();
       stepIdxSaatIni = 0;
@@ -877,6 +959,7 @@ inline void prosesPerintah(String cmd) {
     String arg = cmd.substring(7);
     if (bangunRuteStasiun(arg, true)) {
       tampilkanTabelMapping();
+      resetPauseMisi();
       statusMisiSaatIni   = MISI_JALAN_RUTE_REAL;
       stepIdxSaatIni      = 0;
       sudahAutoAlignStart = false;
@@ -885,6 +968,7 @@ inline void prosesPerintah(String cmd) {
     }
   }
   else if (cmd == "MAP_CLEAR") {
+    resetPauseMisi();
     statusMisiSaatIni = MISI_STANDBY;
     berhentiTotal();
     jumlahStepAktif = 0;
@@ -983,6 +1067,7 @@ inline void prosesPerintah(String cmd) {
     simpanMappingKeFlash();
   }
   else if (cmd == "MAP_LOAD") {
+    resetPauseMisi();
     statusMisiSaatIni = MISI_STANDBY;
     berhentiTotal();
     stepIdxSaatIni = 0;
@@ -990,6 +1075,7 @@ inline void prosesPerintah(String cmd) {
     tampilkanTabelMapping();
   }
   else if (cmd == "MAP_DEFAULT") {
+    resetPauseMisi();
     statusMisiSaatIni = MISI_STANDBY;
     berhentiTotal();
     stepIdxSaatIni = 0;
@@ -1030,6 +1116,7 @@ inline void prosesPerintah(String cmd) {
     Serial.println(">>> [RESET_ENC] Pulsa encoder roda kiri di-nolkan.");
   }
   else if (cmd == "TEST_ENCODER") {
+    resetPauseMisi();
     statusMisiSaatIni = MISI_STANDBY;
     berhentiTotal();
     resetEncoderTicks();
@@ -1057,6 +1144,7 @@ inline void prosesPerintah(String cmd) {
     Serial.println(">>> [SELESAI] Gunakan 'SET_PPR <nilai>' / 'KALIBRASI_50CM' (-> NVS), atau 'MAP_SAVE'!\n");
   }
   else if (cmd == "KALIBRASI_50CM") {
+    resetPauseMisi();
     statusMisiSaatIni = MISI_STANDBY;
     berhentiTotal();
     resetEncoderTicks();
@@ -1352,6 +1440,7 @@ inline void updateNavigationFSM(const LineData& line) {
 
         case ACT_STOP_MISSION:
           berhentiTotal();
+          resetPauseMisi();
           statusMisiSaatIni = MISI_STANDBY;
           Serial.println("\n*******************************************************");
           Serial.println("  [SUKSES] MISI NAVIGASI AGV SELESAI SEMPURNA!         ");

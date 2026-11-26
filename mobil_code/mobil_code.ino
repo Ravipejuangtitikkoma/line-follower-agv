@@ -10,6 +10,7 @@
 //   - GridGraph.h     : Graph Route Planner Arena 3m x 3m (Otomatis Stasiun A-E)
 //   - RouteStorage.h  : Penyimpanan Permanen Flash ESP32 (NVS Preferences)
 //   - NavigationFSM.h : Eksekutor 4-Fase Navigasi & Parser Perintah Serial/LoRa
+//   - LoRaComm.h      : Penerima Perintah & Balasan ACK Nirkabel LoRa Mappi32
 // ====================================================================
 
 #include <Arduino.h>
@@ -21,6 +22,7 @@
 #include "GridGraph.h"
 #include "RouteStorage.h"
 #include "NavigationFSM.h"
+#include "LoRaComm.h"
 
 // Variabel Pewaktu Telemetri
 static unsigned long lastLogTime = 0;
@@ -44,6 +46,7 @@ void setup() {
   resetNodeDetector();
   muatMappingDariFlash();
   initNavigationFSM();
+  initLoRaAGV();
   tampilkanTabelMapping();
 
   if (!GUNAKAN_SENSOR_JARAK) {
@@ -59,13 +62,16 @@ void setup() {
   cetakBantuanSerial();
 
   if (runtimeAutoStart) {
-    Serial.println("\n[INFO] Robot otomatis mulai dalam 2 detik... (Ketik perintah di Serial untuk batal & konfigurasi)\n");
+    Serial.println("\n[INFO] Robot otomatis mulai dalam 2 detik... (Ketik perintah Serial / kirim LoRa untuk batal & konfigurasi)\n");
     unsigned long tWait = millis();
     while (millis() - tWait < 2000) {
       if (Serial.available()) {
         statusMisiSaatIni = MISI_STANDBY;
         String cmd = Serial.readStringUntil('\n');
         prosesPerintah(cmd);
+        break;
+      }
+      if (cekPerintahLoRa()) {
         break;
       }
       delay(10);
@@ -82,6 +88,7 @@ void loop() {
   // 2. SAFETY INTERLOCK: JIKA ADA HALANGAN DEPAN, REM DARURAT
   if (statusHalangan) {
     berhentiTotal();
+    cekPerintahLoRa();
     if (millis() - lastLogTime >= 300) {
       lastLogTime = millis();
       Serial.print("[HALANGAN DEPAN!] Berhenti Darurat! Jarak: ");
@@ -96,11 +103,12 @@ void loop() {
     return;
   }
 
-  // 3. MONITOR PERINTAH EKSTERNAL (SERIAL MONITOR / SIMULASI PAKET LORA)
+  // 3. MONITOR PERINTAH EKSTERNAL (SERIAL MONITOR & PAKET LORA NIRKABEL)
   if (Serial.available()) {
     String cmd = Serial.readStringUntil('\n');
     prosesPerintah(cmd);
   }
+  cekPerintahLoRa();
 
   // 4. PEMBACAAN 5 SENSOR GARIS (1 = Hitam, 0 = Spanduk/Kardus Putih)
   LineData line = bacaSensorGaris();
