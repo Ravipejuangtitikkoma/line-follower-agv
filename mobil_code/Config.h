@@ -177,7 +177,7 @@ const unsigned long LOCKOUT_PENGAMAN_N6_MS         = 600;   // Abaikan garis awa
 const unsigned long LOCKOUT_PENGAMAN_SIMPANG_MS    = LOCKOUT_PENGAMAN_N6_MS; // Alias pengaman simpang N6 (Step 2) & N14 (Step 5)
 
 // ================= PARAMETER MAPPING DINAMIS & FLASH ESP32 (NVS) =================
-const int   MAX_PLAN_STEPS          = 28;    // Kapasitas maksimal langkah rute aktif (aman 1 halaman NVS ESP32)
+const int   MAX_PLAN_STEPS          = 40;    // Kapasitas maksimal langkah rute aktif (aman 1 halaman NVS ESP32)
 const float OFFSET_CROSS_SIMPANG_CM = 9.0f;  // Kompensasi jarak maju ~450ms saat melintasi simpang lurus sebelum ukur 50cm ke stasiun
 const bool  AUTO_START_SAAT_NYALA   = false; // false = masuk mode STANDBY saat boot menunggu START / perintah LoRa
 
