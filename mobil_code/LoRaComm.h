@@ -25,12 +25,13 @@
 static bool          loraAktif     = false;
 static long          lastLoRaSeq   = -1;
 static unsigned long lastLoRaSeqMs = 0;
+static String        lastLoRaCmd   = "";
 static String        lastLoRaAck   = "";
 
 // Helper nama singkat status misi untuk balasan ACK LoRa
 inline const char* loraNamaStatusMisi() {
   switch (statusMisiSaatIni) {
-    case MISI_STANDBY:         return "STANDBY";
+    case MISI_STANDBY:         return sedangDijedaMisi ? "PAUSE" : "STANDBY";
     case MISI_JALAN_RUTE_REAL: return "JALAN";
     case MISI_EMERGENCY_STOP:  return "E-STOP";
     default:                   return "?";
@@ -109,7 +110,7 @@ inline bool cekPerintahLoRa() {
   cmdUpper.toUpperCase();
 
   // Deduplikasi bila controller mengirim ulang seq yang sama karena ACK sempat hilang
-  if (seqNum >= 0 && seqNum == lastLoRaSeq && (millis() - lastLoRaSeqMs < 5000UL) && lastLoRaAck.length() > 0) {
+  if (seqNum >= 0 && seqNum == lastLoRaSeq && cmdUpper == lastLoRaCmd && (millis() - lastLoRaSeqMs < 5000UL) && lastLoRaAck.length() > 0) {
     Serial.print("[LORA RX RETRY] \"");
     Serial.print(raw);
     Serial.print("\" (RSSI:"); Serial.print(rssi);
@@ -141,6 +142,7 @@ inline bool cekPerintahLoRa() {
 
   lastLoRaSeq   = seqNum;
   lastLoRaSeqMs = millis();
+  lastLoRaCmd   = cmdUpper;
   lastLoRaAck   = ack;
 
   kirimBalasanLoRa(ack);

@@ -111,9 +111,9 @@ const PlanStep RUTE_PRESET_ED[] = {
   { "LEWAT_N3",           TRIG_CABANG_KIRI,    350,                        0.0f,             0,                    false,    0,                           false, 0,      0,     0,                        ACT_CROSS_STRAIGHT   }, // 1
   { "N4_BELOK_KIRI",      TRIG_T_KIRI,         350,                        0.0f,             0,                    false,    OFFSET_MAJU_BELOK_MS,        false, 105,    45,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_LEFT        }, // 2
   { "CHECKPOINT_E",       TRIG_ENCODER_JARAK,  100,                        50.0f,            TIMEOUT_ENCODER_A_MS, true,     0,                           false, 85,     35,    DURASI_JEDA_TITIK_A_MS,   ACT_PAUSE_ONLY       }, // 3
-  { "LEWAT_N8",           TRIG_PEREMPATAN,     250,                        0.0f,             0,                    false,    0,                           false, 0,      0,     0,                        ACT_CROSS_STRAIGHT   }, // 4
-  { "LEWAT_N12",          TRIG_PEREMPATAN,     400,                        0.0f,             0,                    false,    0,                           false, 0,      0,     0,                        ACT_CROSS_STRAIGHT   }, // 5
-  { "CHECKPOINT_D",       TRIG_ENCODER_JARAK,  100,                        50.0f,            TIMEOUT_ENCODER_C_MS, true,     0,                           false, 85,     35,    DURASI_JEDA_TITIK_C_MS,   ACT_PAUSE_ONLY       }, // 6
+  { "LEWAT_N8",           TRIG_CABANG_KIRI,    250,                        0.0f,             0,                    false,    0,                           false, 0,      0,     0,                        ACT_CROSS_STRAIGHT   }, // 4
+  { "LEWAT_N12",          TRIG_CABANG_KIRI,    400,                        0.0f,             0,                    false,    0,                           false, 0,      0,     0,                        ACT_CROSS_STRAIGHT   }, // 5
+  { "CHECKPOINT_D",       TRIG_ENCODER_JARAK,  100,                        JARAK_N10_KE_C_CM,TIMEOUT_ENCODER_C_MS, true,     0,                           false, 85,     35,    DURASI_JEDA_TITIK_C_MS,   ACT_PAUSE_ONLY       }, // 6
   { "PULANG_N16_KIRI",    TRIG_T_KIRI,         250,                        0.0f,             0,                    false,    OFFSET_MAJU_BELOK_MS,        false, 105,    45,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_LEFT_PULANG }, // 7
   { "PULANG_N15_KIRI",    TRIG_T_KIRI,         350,                        0.0f,             0,                    false,    OFFSET_MAJU_BELOK_MS,        false, 105,    45,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_LEFT_PULANG }, // 8
   { "PULANG_N11",         TRIG_PEREMPATAN,     400,                        0.0f,             0,                    false,    0,                           false, 0,      0,     0,                        ACT_CROSS_STRAIGHT   }, // 9
@@ -132,7 +132,7 @@ const PlanStep RUTE_PRESET_BD[] = {
   { "N0_BELOK_KANAN",     TRIG_PEREMPATAN,     250,                        0.0f,             0,                    false,    OFFSET_MAJU_SIMPANG_KANAN_MS,false, 105,    45,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_RIGHT       }, // 0
   { "N3_BELOK_KIRI",      TRIG_CABANG_KIRI,    350,                        0.0f,             0,                    false,    OFFSET_MAJU_BELOK_MS,        false, 105,    45,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_LEFT        }, // 1
   { "LEWAT_N7",           TRIG_PEREMPATAN,     350,                        0.0f,             0,                    false,    0,                           false, 0,      0,     0,                        ACT_CROSS_STRAIGHT   }, // 2
-  { "CHECKPOINT_B",       TRIG_ENCODER_JARAK,  100,                        50.0f,            TIMEOUT_ENCODER_A_MS, true,     0,                           false, 85,     35,    DURASI_JEDA_TITIK_A_MS,   ACT_PAUSE_ONLY       }, // 3
+  { "CHECKPOINT_B",       TRIG_ENCODER_JARAK,  100,                        50.0f - OFFSET_CROSS_SIMPANG_CM, TIMEOUT_ENCODER_A_MS, true, 0,                  false, 85,     35,    DURASI_JEDA_TITIK_A_MS,   ACT_PAUSE_ONLY       }, // 3
   { "N11_BELOK_KANAN",    TRIG_PEREMPATAN,     250,                        0.0f,             0,                    false,    OFFSET_MAJU_SIMPANG_KANAN_MS,false, 105,    45,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_RIGHT       }, // 4
   { "N12_BELOK_KIRI",     TRIG_CABANG_KIRI,    350,                        0.0f,             0,                    false,    OFFSET_MAJU_BELOK_MS,        false, 105,    45,    JEDA_DIEM_SIMPANG_MS,     ACT_TURN_LEFT        }, // 5
   { "CHECKPOINT_D",       TRIG_ENCODER_JARAK,  100,                        50.0f,            TIMEOUT_ENCODER_C_MS, true,     0,                           false, 85,     35,    DURASI_JEDA_TITIK_C_MS,   ACT_PAUSE_ONLY       }, // 6
@@ -231,6 +231,7 @@ inline bool muatPresetRute(PresetRuteId idPreset, bool resetParam = false) {
       ruteAktif[i].pauseMs = (uint16_t)constrain((long)runtimeJedaStasiunMs, 0L, 60000L);
     }
   }
+  runtimePulangOtomatis = true;
   strncpy(namaRuteAktif, nama, sizeof(namaRuteAktif) - 1);
   namaRuteAktif[sizeof(namaRuteAktif) - 1] = '\0';
   return true;

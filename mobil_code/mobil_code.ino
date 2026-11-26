@@ -31,6 +31,14 @@ void setup() {
   Serial.begin(115200);
   delay(1000);
 
+  // Inisialisasi Perangkat Keras & Muat Mapping Tersimpan dari Flash
+  initMotor();
+  initSensors();
+  resetNodeDetector();
+  muatMappingDariFlash();
+  initNavigationFSM();
+  initLoRaAGV();
+
   Serial.println("\n=======================================================");
   Serial.println("   AGV ROBOT: HIERARCHICAL FINITE STATE MACHINE (HFSM) ");
   Serial.print("   Rute Aktif  : "); Serial.println(namaRuteAktif);
@@ -40,13 +48,6 @@ void setup() {
   Serial.println("   Mapping Dinamis Serial + Flash NVS | Board: Mappi32 (ESP32)");
   Serial.println("=======================================================");
 
-  // Inisialisasi Perangkat Keras & Muat Mapping Tersimpan dari Flash
-  initMotor();
-  initSensors();
-  resetNodeDetector();
-  muatMappingDariFlash();
-  initNavigationFSM();
-  initLoRaAGV();
   tampilkanTabelMapping();
 
   if (!GUNAKAN_SENSOR_JARAK) {

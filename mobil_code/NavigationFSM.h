@@ -50,10 +50,19 @@ static bool            uturnOffsetSelesai        = false;
 static unsigned long   waktuMulaiPutar180        = 0;
 static bool            sedangDijedaMisi          = false;
 static unsigned long   waktuMulaiPause           = 0;
+static int             navNodeTerakhir           = ND_START;
+static int             navArahSaatIni            = DIR_TIMUR;
+static bool            navPoseValid              = true;
 
 inline void resetPauseMisi() {
   sedangDijedaMisi = false;
   waktuMulaiPause  = 0;
+}
+
+inline void resetPoseNavigasi(bool valid = true) {
+  navNodeTerakhir = ND_START;
+  navArahSaatIni  = DIR_TIMUR;
+  navPoseValid    = valid;
 }
 
 inline long getDeltaTicksFase() {
@@ -139,8 +148,38 @@ inline void gantiFase(StepPhase faseBaru, const char* alasan) {
   }
 }
 
+// Catat perpindahan node & arah hadap pada graf arena setelah 1 step selesai dijalankan
+inline void catatkanTransisiPoseStep(int idxSelesai) {
+  if (!navPoseValid || idxSelesai < 0 || idxSelesai >= jumlahStepAktif) return;
+  const PlanStep& s = ruteAktif[idxSelesai];
+  if (s.action == ACT_PAUSE_ONLY) {
+    int st = GRID_NODES[navNodeTerakhir].nbr[navArahSaatIni];
+    if (st >= 0 && isNodeStasiun(st)) {
+      navNodeTerakhir = st;
+    }
+  } else if (s.action == ACT_CROSS_STRAIGHT) {
+    int sp = cariSimpangDepanGrid(navNodeTerakhir, navArahSaatIni);
+    if (sp >= 0) navNodeTerakhir = sp;
+  } else if (s.action == ACT_TURN_RIGHT) {
+    int sp = cariSimpangDepanGrid(navNodeTerakhir, navArahSaatIni);
+    if (sp >= 0) {
+      navNodeTerakhir = sp;
+      navArahSaatIni  = (navArahSaatIni + 1) % 4;
+    }
+  } else if (s.action == ACT_TURN_LEFT || s.action == ACT_TURN_LEFT_PULANG) {
+    int sp = cariSimpangDepanGrid(navNodeTerakhir, navArahSaatIni);
+    if (sp >= 0) {
+      navNodeTerakhir = sp;
+      navArahSaatIni  = (navArahSaatIni + 3) % 4;
+    }
+  } else if (s.action == ACT_UTURN_180) {
+    navArahSaatIni = (navArahSaatIni + 2) % 4;
+  }
+}
+
 // Helper berpindah ke step berikutnya di tabel PlanStep
 inline void majuKeStepBerikutnya(const char* alasan) {
+  catatkanTransisiPoseStep(stepIdxSaatIni);
   stepIdxSaatIni++;
   if (stepIdxSaatIni >= jumlahStepAktif) {
     berhentiTotal();
@@ -348,12 +387,13 @@ inline bool evaluasiTrigger(const PlanStep& step, const LineData& line, unsigned
         }
       }
 
-      // 3. PENGAMAN KERAS SIMPANG (mencegah bablas melewati N6 saat ke A atau melewati N14 saat ke C)
+      // 3. PENGAMAN KERAS SIMPANG (mencegah bablas melewati simpang depan saat menuju stasiun)
       if (step.stopJikaSimpang && durasiDiFase >= LOCKOUT_PENGAMAN_SIMPANG_MS &&
           (line.isGelapSemua() || line.isPerempatan)) {
         berhentiDiSimpangPengaman = true;
-        const char* namaSimpang = (stepIdxSaatIni == IDX_STEP_CHECKPOINT_A) ? "N6" : "N14";
-        float jarakSimpangCm    = (stepIdxSaatIni == IDX_STEP_CHECKPOINT_A) ? 100.0f : 40.0f;
+        int idSimpang = navPoseValid ? cariSimpangDepanGrid(navNodeTerakhir, navArahSaatIni) : -1;
+        const char* namaSimpang = (idSimpang >= 0) ? GRID_NODES[idSimpang].name : "SIMPANG_DEPAN";
+        float jarakSimpangCm    = (step.targetJarakCm < 45.0f) ? (100.0f - OFFSET_CROSS_SIMPANG_CM) : 100.0f;
         Serial.print("\n>>> [PENGAMAN SIMPANG ");
         Serial.print(namaSimpang);
         Serial.print("] Robot menyentuh ");
@@ -786,6 +826,7 @@ inline void initNavigationFSM() {
   uturnOffsetSelesai        = false;
   waktuMulaiPutar180        = 0;
   resetPauseMisi();
+  resetPoseNavigasi(strncmp(namaRuteAktif, "MANUAL", 6) != 0);
   resetWingTimestamps();
   Serial.print("[PLAN ENGINE] Rute Aktif: ");
   Serial.print(namaRuteAktif);
@@ -808,6 +849,7 @@ inline void prosesPerintah(String cmd) {
       return;
     }
     resetPauseMisi();
+    resetPoseNavigasi(strncmp(namaRuteAktif, "MANUAL", 6) != 0);
     statusMisiSaatIni   = MISI_JALAN_RUTE_REAL;
     stepIdxSaatIni      = 0;
     sudahAutoAlignStart = false;
@@ -843,6 +885,44 @@ inline void prosesPerintah(String cmd) {
     }
   }
   else if (cmd == "PULANG" || cmd == "BALIK" || cmd == "RETURN" || cmd == "CMD:HOME") {
+    if (statusMisiSaatIni == MISI_EMERGENCY_STOP) {
+      Serial.println("[INFO] Robot dalam status E-STOP. Ketik 'RESET' atau 'START' terlebih dahulu.");
+      return;
+    }
+    if (statusMisiSaatIni == MISI_STANDBY && !sedangDijedaMisi &&
+        stepIdxSaatIni == 0 && navPoseValid && navNodeTerakhir == ND_START) {
+      Serial.println("[INFO] Robot sudah berada di titik START (belum berangkat).");
+      return;
+    }
+
+    if (navPoseValid) {
+      if (stepIdxSaatIni >= 0 && stepIdxSaatIni < jumlahStepAktif &&
+          ruteAktif[stepIdxSaatIni].trigger == TRIG_ENCODER_JARAK &&
+          faseSaatIni == PHASE_PAUSE) {
+        int st = GRID_NODES[navNodeTerakhir].nbr[navArahSaatIni];
+        if (st >= 0 && isNodeStasiun(st)) {
+          navNodeTerakhir = st;
+        }
+      }
+
+      bool sudahDiAtasSimpang = (statusMisiSaatIni == MISI_JALAN_RUTE_REAL || sedangDijedaMisi) &&
+                                stepIdxSaatIni >= 0 && stepIdxSaatIni < jumlahStepAktif &&
+                                ruteAktif[stepIdxSaatIni].trigger != TRIG_ENCODER_JARAK &&
+                                ruteAktif[stepIdxSaatIni].trigger != TRIG_IMMEDIATE &&
+                                (faseSaatIni == PHASE_PRE_MOVE || faseSaatIni == PHASE_PAUSE);
+
+      int simpangDepan = cariSimpangDepanGrid(navNodeTerakhir, navArahSaatIni);
+      if (bangunRutePulangDariSimpang(simpangDepan, navArahSaatIni, navNodeTerakhir)) {
+        resetPauseMisi();
+        statusMisiSaatIni = MISI_JALAN_RUTE_REAL;
+        stepIdxSaatIni    = 0;
+        tampilkanTabelMapping();
+        gantiFase(sudahDiAtasSimpang ? PHASE_ACTION : PHASE_FOLLOW,
+                  "Perintah Operator PULANG (Rute Pulang Pintar Dinamis)");
+        return;
+      }
+    }
+
     int idxUTurn = cariIdxStepUTurn();
     if (idxUTurn >= 0) {
       resetPauseMisi();
@@ -891,6 +971,7 @@ inline void prosesPerintah(String cmd) {
   else if (cmd == "RUTE 1" || cmd == "RUTE_AC" || cmd == "RUTE AC") {
     if (bangunRuteStasiun("A,C", true)) {
       resetPauseMisi();
+      resetPoseNavigasi(true);
       statusMisiSaatIni = MISI_STANDBY;
       berhentiTotal();
       stepIdxSaatIni = 0;
@@ -902,6 +983,7 @@ inline void prosesPerintah(String cmd) {
   else if (cmd == "RUTE 2" || cmd == "RUTE_AB" || cmd == "RUTE AB") {
     if (bangunRuteStasiun("A,B", true)) {
       resetPauseMisi();
+      resetPoseNavigasi(true);
       statusMisiSaatIni = MISI_STANDBY;
       berhentiTotal();
       stepIdxSaatIni = 0;
@@ -913,6 +995,7 @@ inline void prosesPerintah(String cmd) {
   else if (cmd == "RUTE 3" || cmd == "RUTE_ED" || cmd == "RUTE ED") {
     if (bangunRuteStasiun("E,D", true)) {
       resetPauseMisi();
+      resetPoseNavigasi(true);
       statusMisiSaatIni = MISI_STANDBY;
       berhentiTotal();
       stepIdxSaatIni = 0;
@@ -924,6 +1007,7 @@ inline void prosesPerintah(String cmd) {
   else if (cmd == "RUTE 4" || cmd == "RUTE_BD" || cmd == "RUTE BD") {
     if (bangunRuteStasiun("B,D", true)) {
       resetPauseMisi();
+      resetPoseNavigasi(true);
       statusMisiSaatIni = MISI_STANDBY;
       berhentiTotal();
       stepIdxSaatIni = 0;
@@ -936,6 +1020,7 @@ inline void prosesPerintah(String cmd) {
     String arg = cmd.substring(5);
     if (bangunRuteStasiun(arg, true)) {
       resetPauseMisi();
+      resetPoseNavigasi(true);
       statusMisiSaatIni = MISI_STANDBY;
       berhentiTotal();
       stepIdxSaatIni = 0;
@@ -948,6 +1033,7 @@ inline void prosesPerintah(String cmd) {
     String arg = cmd.substring(12);
     if (bangunRuteStasiun(arg, false)) {
       resetPauseMisi();
+      resetPoseNavigasi(true);
       statusMisiSaatIni = MISI_STANDBY;
       berhentiTotal();
       stepIdxSaatIni = 0;
@@ -960,6 +1046,7 @@ inline void prosesPerintah(String cmd) {
     if (bangunRuteStasiun(arg, true)) {
       tampilkanTabelMapping();
       resetPauseMisi();
+      resetPoseNavigasi(true);
       statusMisiSaatIni   = MISI_JALAN_RUTE_REAL;
       stepIdxSaatIni      = 0;
       sudahAutoAlignStart = false;
@@ -969,6 +1056,7 @@ inline void prosesPerintah(String cmd) {
   }
   else if (cmd == "MAP_CLEAR") {
     resetPauseMisi();
+    resetPoseNavigasi(false);
     statusMisiSaatIni = MISI_STANDBY;
     berhentiTotal();
     jumlahStepAktif = 0;
@@ -1006,6 +1094,9 @@ inline void prosesPerintah(String cmd) {
     jumlahStepAktif++;
     strncpy(namaRuteAktif, "MANUAL_CUSTOM", sizeof(namaRuteAktif) - 1);
     namaRuteAktif[sizeof(namaRuteAktif) - 1] = '\0';
+    resetPauseMisi();
+    resetPoseNavigasi(false);
+    stepIdxSaatIni    = 0;
     statusMisiSaatIni = MISI_STANDBY;
     berhentiTotal();
     Serial.print(">>> [MAP_ADD] Step "); Serial.print(jumlahStepAktif - 1); Serial.println(" ditambahkan.");
@@ -1037,6 +1128,9 @@ inline void prosesPerintah(String cmd) {
     isiDefaultStepDariAksi(ruteAktif[idx], trig, targetCm, pauseMs, act, lblLama);
     strncpy(namaRuteAktif, "MANUAL_CUSTOM", sizeof(namaRuteAktif) - 1);
     namaRuteAktif[sizeof(namaRuteAktif) - 1] = '\0';
+    resetPauseMisi();
+    resetPoseNavigasi(false);
+    stepIdxSaatIni    = 0;
     statusMisiSaatIni = MISI_STANDBY;
     berhentiTotal();
     Serial.print(">>> [MAP_SET] Step "); Serial.print(idx); Serial.println(" diperbarui.");
@@ -1058,6 +1152,9 @@ inline void prosesPerintah(String cmd) {
       ruteAktif[i] = ruteAktif[i + 1];
     }
     jumlahStepAktif--;
+    resetPauseMisi();
+    resetPoseNavigasi(false);
+    stepIdxSaatIni    = 0;
     statusMisiSaatIni = MISI_STANDBY;
     berhentiTotal();
     Serial.print(">>> [MAP_DEL] Step "); Serial.print(idx); Serial.println(" dihapus.");
@@ -1072,10 +1169,12 @@ inline void prosesPerintah(String cmd) {
     berhentiTotal();
     stepIdxSaatIni = 0;
     muatMappingDariFlash();
+    resetPoseNavigasi(strncmp(namaRuteAktif, "MANUAL", 6) != 0);
     tampilkanTabelMapping();
   }
   else if (cmd == "MAP_DEFAULT") {
     resetPauseMisi();
+    resetPoseNavigasi(true);
     statusMisiSaatIni = MISI_STANDBY;
     berhentiTotal();
     stepIdxSaatIni = 0;
@@ -1178,7 +1277,7 @@ inline void prosesPerintah(String cmd) {
     Serial.print("Rute Aktif: "); Serial.println(namaRuteAktif);
     Serial.print("Misi: ");
     switch (statusMisiSaatIni) {
-      case MISI_STANDBY:          Serial.println("STANDBY"); break;
+      case MISI_STANDBY:          Serial.println(sedangDijedaMisi ? "PAUSE (Menunggu LANJUT / PULANG)" : "STANDBY"); break;
       case MISI_JALAN_RUTE_REAL:  Serial.println("JALAN RUTE AKTIF"); break;
       case MISI_EMERGENCY_STOP:   Serial.println("EMERGENCY STOP"); break;
     }
@@ -1416,12 +1515,14 @@ inline void updateNavigationFSM(const LineData& line) {
           } else if (berhentiDiSimpangPengaman && stepBerikutnyaLintasLurus) {
             // Pengaman simpang sempat menghentikan robot tepat di garis simpang berikutnya (misal N6):
             // langsung jalankan PHASE_ACTION step lintasi-lurus berikutnya agar referensi tetap sinkron.
+            catatkanTransisiPoseStep(stepIdxSaatIni);
             stepIdxSaatIni++;
             berhentiDiSimpangPengaman = false;
             gantiFase(PHASE_ACTION, "Pengaman Simpang Terpicu -> Langsung Melintasi Simpang Berikutnya");
           } else if (berhentiDiSimpangPengaman && stepBerikutnyaBelok) {
             // Pengaman simpang menghentikan robot tepat di simpang belok berikutnya (misal N14):
             // lewati PHASE_FOLLOW step belok agar tidak bablas melewati ujung N14 saat lockout.
+            catatkanTransisiPoseStep(stepIdxSaatIni);
             stepIdxSaatIni++;
             berhentiDiSimpangPengaman = false;
             gantiFase(PHASE_PRE_MOVE, "Pengaman Simpang Terpicu -> Langsung Pre-Move Belok di Simpang");

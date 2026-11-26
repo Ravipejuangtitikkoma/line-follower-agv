@@ -106,6 +106,45 @@ inline int hurufKeNodeStasiun(char c) {
   }
 }
 
+// Cari simpang non-stasiun berikutnya di depan arah hadap saat ini (melewati node stasiun lurus jika ada)
+inline int cariSimpangDepanGrid(int fromNode, int dir) {
+  if (fromNode < 0 || fromNode >= GRID_NUM_NODES || dir < 0 || dir >= GRID_NUM_DIRS) return -1;
+  int nxt = GRID_NODES[fromNode].nbr[dir];
+  if (nxt >= 0 && isNodeStasiun(nxt)) {
+    nxt = GRID_NODES[nxt].nbr[dir];
+  }
+  return nxt;
+}
+
+// Pilih trigger sensor yang akurat sesuai geometri cabang di simpang u saat didekati dari dirIn
+inline StepTrigger pilihTriggerSimpangGrid(int u, int dirIn, int rel) {
+  int leftDir   = (dirIn + 3) % 4;
+  int rightDir  = (dirIn + 1) % 4;
+  bool hasLeft  = (GRID_NODES[u].nbr[leftDir]  >= 0);
+  bool hasRight = (GRID_NODES[u].nbr[rightDir] >= 0);
+  bool hasAhead = (GRID_NODES[u].nbr[dirIn]    >= 0);
+
+  if (!hasAhead) {
+    if (hasLeft && hasRight) {
+      return (rel == 3) ? TRIG_T_KIRI : TRIG_PEREMPATAN;
+    } else if (hasRight && !hasLeft) {
+      return TRIG_CABANG_KANAN; // Sudut siku L kanan (N1, N13, N16, N4): hanya sisi kanan hitam
+    } else if (hasLeft && !hasRight) {
+      return TRIG_T_KIRI;       // Sudut siku L kiri: hanya sisi kiri hitam
+    }
+    return TRIG_PEREMPATAN;
+  }
+
+  if (hasLeft && hasRight) {
+    return (rel == 3) ? TRIG_T_KIRI : TRIG_PEREMPATAN;
+  } else if (hasRight && !hasLeft) {
+    return TRIG_CABANG_KANAN;
+  } else if (hasLeft && !hasRight) {
+    return TRIG_CABANG_KIRI;
+  }
+  return TRIG_PEREMPATAN;
+}
+
 // Dijkstra ringan atas (node, arahHadap) mencari jalur terpendek antara dua waypoint
 inline bool cariJalurTerpendekGrid(int startNode,
                                    int startDir,
@@ -300,23 +339,7 @@ inline bool bangunRuteStasiun(const String& daftarRaw, bool pulangKeStart) {
       }
 
       int rel = (dirOut - dirIn + 4) % 4;
-      int leftDir  = (dirIn + 3) % 4;
-      int rightDir = (dirIn + 1) % 4;
-      bool hasLeft  = (GRID_NODES[u].nbr[leftDir]  >= 0);
-      bool hasRight = (GRID_NODES[u].nbr[rightDir] >= 0);
-      bool hasAhead = (GRID_NODES[u].nbr[dirIn]    >= 0);
-
-      StepTrigger trig = TRIG_PEREMPATAN;
-      if (!hasAhead) {
-        // Ujung garis / siku sudut / simpang T melintang (tidak ada jalur lurus di depan)
-        trig = (rel == 3) ? TRIG_T_KIRI : TRIG_PEREMPATAN;
-      } else if (hasLeft && hasRight) {
-        trig = (rel == 3) ? TRIG_T_KIRI : TRIG_PEREMPATAN;
-      } else if (hasRight && !hasLeft) {
-        trig = TRIG_CABANG_KANAN;
-      } else if (hasLeft && !hasRight) {
-        trig = TRIG_CABANG_KIRI;
-      }
+      StepTrigger trig = pilihTriggerSimpangGrid(u, dirIn, rel);
 
       PlanStep st;
       char lbl[20];
@@ -398,5 +421,93 @@ inline bool bangunRuteStasiun(const String& daftarRaw, bool pulangKeStart) {
   strncpy(namaRuteAktif, nama.c_str(), sizeof(namaRuteAktif) - 1);
   namaRuteAktif[sizeof(namaRuteAktif) - 1] = '\0';
 
+  return true;
+}
+
+// Susun rute pulang dinamis tanpa U-Turn dari simpang depan & arah hadap saat ini menuju START
+inline bool bangunRutePulangDariSimpang(int simpangAwal, int arahMasuk, int dariNodeLabel = -1) {
+  if (simpangAwal < 0 || simpangAwal >= GRID_NUM_NODES || arahMasuk < 0 || arahMasuk >= GRID_NUM_DIRS) {
+    return false;
+  }
+
+  if (simpangAwal == ND_START) {
+    ruteAktif[0] = buatPlanStep("FINISH_START", TRIG_PEREMPATAN, 200, 0.0f, 0, false,
+                                0, false, 85, 35, 50, ACT_STOP_MISSION);
+    jumlahStepAktif       = 1;
+    runtimePulangOtomatis = true;
+    strncpy(namaRuteAktif, "PULANG_KE_START", sizeof(namaRuteAktif) - 1);
+    namaRuteAktif[sizeof(namaRuteAktif) - 1] = '\0';
+    return true;
+  }
+
+  int pathNodes[GRID_NUM_STATES];
+  int pathDirs[GRID_NUM_STATES];
+  int pathLen = 0;
+
+  if (!cariJalurTerpendekGrid(simpangAwal, arahMasuk, ND_START, pathNodes, pathDirs, pathLen, GRID_NUM_STATES) ||
+      pathLen < 2) {
+    return false;
+  }
+
+  PlanStep tempRute[MAX_PLAN_STEPS];
+  int tempCount = 0;
+
+  auto tambahStep = [&](const PlanStep& s) -> bool {
+    if (tempCount >= MAX_PLAN_STEPS) return false;
+    tempRute[tempCount++] = s;
+    return true;
+  };
+
+  for (int k = 0; k < pathLen - 1; k++) {
+    int u      = pathNodes[k];
+    int dirIn  = pathDirs[k];
+    int dirOut = pathDirs[k + 1];
+
+    if (isNodeStasiun(u)) {
+      continue;
+    }
+
+    int rel = (dirOut - dirIn + 4) % 4;
+    StepTrigger trig = pilihTriggerSimpangGrid(u, dirIn, rel);
+
+    PlanStep st;
+    char lbl[20];
+    if (rel == 0) {
+      uint16_t lock = (k == 0) ? 200 : 350;
+      snprintf(lbl, sizeof(lbl), "PLG_%s_LURUS", GRID_NODES[u].name);
+      st = buatPlanStep(lbl, trig, lock, 0.0f, 0, false, 0, false, 0, 0, 0, ACT_CROSS_STRAIGHT);
+    } else if (rel == 1) {
+      uint16_t lock = (k == 0) ? 200 : ((trig == TRIG_CABANG_KANAN) ? WAKTU_MINIMAL_RUAS2_MS : 250);
+      snprintf(lbl, sizeof(lbl), "PLG_%s_KANAN", GRID_NODES[u].name);
+      st = buatPlanStep(lbl, trig, lock, 0.0f, 0, false,
+                        OFFSET_MAJU_SIMPANG_KANAN_MS, false, 105, 45, JEDA_DIEM_SIMPANG_MS, ACT_TURN_RIGHT);
+    } else { // rel == 3 (Kiri)
+      uint16_t lock = (k == 0) ? 200 : 350;
+      snprintf(lbl, sizeof(lbl), "PLG_%s_KIRI", GRID_NODES[u].name);
+      st = buatPlanStep(lbl, trig, lock, 0.0f, 0, false,
+                        OFFSET_MAJU_BELOK_MS, false, 105, 45, JEDA_DIEM_SIMPANG_MS, ACT_TURN_LEFT_PULANG);
+    }
+
+    if (!tambahStep(st)) {
+      return false;
+    }
+  }
+
+  if (!tambahStep(buatPlanStep("FINISH_START", TRIG_PEREMPATAN, 350, 0.0f, 0, false,
+                               0, false, 85, 35, 50, ACT_STOP_MISSION))) {
+    return false;
+  }
+
+  for (int i = 0; i < tempCount; i++) {
+    ruteAktif[i] = tempRute[i];
+  }
+  jumlahStepAktif       = tempCount;
+  runtimePulangOtomatis = true;
+
+  const char* lblAsal = (dariNodeLabel >= 0 && dariNodeLabel < GRID_NUM_NODES)
+                          ? GRID_NODES[dariNodeLabel].name
+                          : GRID_NODES[simpangAwal].name;
+  snprintf(namaRuteAktif, sizeof(namaRuteAktif), "PULANG_DARI_%s", lblAsal);
+  namaRuteAktif[sizeof(namaRuteAktif) - 1] = '\0';
   return true;
 }
