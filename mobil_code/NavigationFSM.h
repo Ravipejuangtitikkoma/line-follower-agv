@@ -515,25 +515,30 @@ inline void eksekusiAksiBelokKiri(const LineData& line, unsigned long durasiDiFa
     }
   }
 
-  // FASE A: Pastikan bodi benar-benar keluar dari bayangan garis lama & area kotak biru (totalAktif >= 4)
-  if (durasiDiFase < 440UL && line.totalAktif >= 4) {
-    // Sedang menyapu bidang kotak biru lebar -> jangan kunci tepi keluarnya! Wajib lewat ruang putih dulu
+  // FASE A: Pastikan bodi benar-benar keluar dari bayangan garis lama & area kotak biru (lebar / tepi miring)
+  bool kenaBlokLebarKiri = (line.totalAktif >= 4 ||
+                            (line.b1 == 1 && line.b2 == 1 && line.b3 == 1) ||
+                            (line.b3 == 1 && line.b4 == 1 && line.b5 == 1));
+  if (durasiDiFase < 350UL && kenaBlokLebarKiri) {
+    // Sedang menyapu bidang kotak biru lebar -> reset agar tidak mengunci tepi keluarnya!
     sudahLepasGarisLama = false;
-  } else if (!sudahLepasGarisLama) {
-    if ((durasiDiFase >= (unsigned long)WAKTU_SWEEP_AWAL_MS && (line.totalAktif == 0 || line.isGarisHilang)) ||
-        (durasiDiFase >= (unsigned long)(WAKTU_SWEEP_AWAL_MS + 80) && line.totalAktif < 4) ||
-        (durasiDiFase >= 440UL)) {
+  } else if (!sudahLepasGarisLama && durasiDiFase >= (unsigned long)WAKTU_SWEEP_AWAL_MS) {
+    if ((line.totalAktif == 0 || line.isGarisHilang) ||
+        (durasiDiFase >= (unsigned long)(WAKTU_SWEEP_AWAL_MS + 50) && line.b1 == 0 && line.b5 == 0 && line.totalAktif <= 2) ||
+        (durasiDiFase >= 350UL)) {
       sudahLepasGarisLama = true;
     }
   }
 
-  // FASE B: Strict Clean Latch mengunci garis 90° di tengah sensor (b1 & b5 wajib 0)
+  // FASE B: Kunci garis 90° di tengah (wajib sayap luar b1 & b5 = 0 agar kebal sudut kotak biru)
   if (sudahLepasGarisLama && durasiDiFase >= (unsigned long)WAKTU_SWEEP_AWAL_MS) {
-    bool garisKiriTengah = (line.b1 == 0 && line.b5 == 0) &&
-                           (line.isLurusBelokKiri() ||
-                            (line.b2 == 1 && line.b3 == 1 && line.b4 == 1) ||
-                            (line.b2 == 0 && line.b3 == 1 && line.b4 == 0));
+    bool garisKiriTengah = (line.b1 == 0 && line.b5 == 0 && line.b3 == 1);
     if (garisKiriTengah) {
+      Serial.print(">>> [KUNCI KIRI] t=");
+      Serial.print(durasiDiFase);
+      Serial.print("ms | [");
+      Serial.print(line.b1); Serial.print(line.b2); Serial.print(line.b3); Serial.print(line.b4); Serial.print(line.b5);
+      Serial.println("]");
       // Putar lanjutan terukur agar bodi 25cm genap 90° sebelum rem singkat
       if (DURASI_FINISH_BELOK_MS > 0) {
         putarPorosKiri(kecSesuaiMaju, kecSesuaiMundur);
@@ -588,21 +593,29 @@ inline void eksekusiAksiBelokKanan(const LineData& line, unsigned long durasiDiF
     }
   }
 
-  // FASE A: Pastikan bodi keluar dari sudut garis lama & area kotak biru (totalAktif >= 4)
-  if (durasiDiFase < 480UL && line.totalAktif >= 4) {
+  // FASE A: Pastikan bodi keluar dari sudut garis lama & area kotak biru (lebar / tepi miring seperti [E] di N7)
+  bool kenaBlokLebarKanan = (line.totalAktif >= 4 ||
+                             (line.b3 == 1 && line.b4 == 1 && line.b5 == 1) ||
+                             (line.b1 == 1 && line.b2 == 1 && line.b3 == 1));
+  if (durasiDiFase < 360UL && kenaBlokLebarKanan) {
     // Sedang menyapu bidang kotak biru lebar -> reset agar tidak mengunci tepi keluarnya!
     sudahLepasGarisLama = false;
-  } else if (!sudahLepasGarisLama) {
-    if ((durasiDiFase >= (unsigned long)WAKTU_ABAIKAN_SENSOR_KANAN_MS && (line.totalAktif == 0 || line.isGarisHilang)) ||
-        (durasiDiFase >= (unsigned long)WAKTU_LEPAS_SUDUT_MIN_MS && line.totalAktif < 4) ||
-        (durasiDiFase >= 480UL)) {
+  } else if (!sudahLepasGarisLama && durasiDiFase >= (unsigned long)WAKTU_ABAIKAN_SENSOR_KANAN_MS) {
+    if ((line.totalAktif == 0 || line.isGarisHilang) ||
+        (durasiDiFase >= (unsigned long)WAKTU_LEPAS_SUDUT_MIN_MS && line.b1 == 0 && line.b5 == 0 && line.totalAktif <= 2) ||
+        (durasiDiFase >= 360UL)) {
       sudahLepasGarisLama = true;
     }
   }
 
-  // FASE B: Strict Binary Latch mengunci garis cabang 90°
+  // FASE B: Kunci garis cabang 90° di tengah (wajib sayap luar b1 & b5 = 0 agar kebal sudut kotak biru)
   if (sudahLepasGarisLama && durasiDiFase >= (unsigned long)WAKTU_ABAIKAN_SENSOR_KANAN_MS) {
-    if (line.isLurusBelokKanan()) {
+    if (line.b1 == 0 && line.b5 == 0 && line.b3 == 1) {
+      Serial.print(">>> [KUNCI KANAN] t=");
+      Serial.print(durasiDiFase);
+      Serial.print("ms | [");
+      Serial.print(line.b1); Serial.print(line.b2); Serial.print(line.b3); Serial.print(line.b4); Serial.print(line.b5);
+      Serial.println("]");
       // Putar lanjutan terukur agar bodi 25cm genap 90° sebelum rem singkat
       if (DURASI_FINISH_BELOK_MS > 0) {
         putarPorosKanan(KEC_BELOK_KANAN_CARI, KEC_BELOK_KANAN_CARI + 6);
@@ -800,7 +813,7 @@ inline void cetakBantuanSerial() {
   Serial.println("   MAP_LOAD / MAP_DEFAULT   -> Muat dari Flash / reset ke default A,C");
   Serial.println(" [4] KONTROL EKSEKUSI & DIAGNOSTIK:");
   Serial.println("   START | LANJUT | PULANG | STANDBY | STOP | RESET | STATUS");
-  Serial.println("   TEST_ENCODER | RESET_ENC | TEST_RODA | TEST_KANAN | TEST_MUNDUR_KANAN");
+  Serial.println("   TEST_ENCODER | RESET_ENC | TEST_RODA | TEST_KIRI | TEST_KANAN | TEST_MUNDUR_KANAN");
   Serial.println("===========================================================================\n");
 }
 
@@ -1320,6 +1333,13 @@ inline void prosesPerintah(String cmd) {
     }
     Serial.println();
     Serial.println("--------------------------------\n");
+  }
+  else if (cmd == "TEST_KIRI") {
+    Serial.println("\n>>> [DIAGNOSTIK] UJI PUTAR POROS KIRI (2 Detik)...");
+    putarPorosKiri(KEC_BELOK_KIRI_MAJU, KEC_BELOK_KIRI_MUNDUR);
+    delay(2000);
+    berhentiTotal();
+    Serial.println(">>> [SELESAI] Cek: Roda kanan maju & roda kiri mundur!\n");
   }
   else if (cmd == "TEST_KANAN") {
     Serial.println("\n>>> [DIAGNOSTIK] UJI PUTAR POROS KANAN (2 Detik)...");

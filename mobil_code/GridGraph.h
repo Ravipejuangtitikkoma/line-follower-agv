@@ -477,7 +477,7 @@ inline bool bangunRutePulangDariSimpang(int simpangAwal, int arahMasuk, int dari
       snprintf(lbl, sizeof(lbl), "PLG_%s_LURUS", GRID_NODES[u].name);
       st = buatPlanStep(lbl, trig, lock, 0.0f, 0, false, 0, false, 0, 0, 0, ACT_CROSS_STRAIGHT);
     } else if (rel == 1) {
-      uint16_t lock = (k == 0) ? 200 : ((trig == TRIG_CABANG_KANAN) ? WAKTU_MINIMAL_RUAS2_MS : 250);
+      uint16_t lock = (k == 0) ? 200 : 350;
       snprintf(lbl, sizeof(lbl), "PLG_%s_KANAN", GRID_NODES[u].name);
       st = buatPlanStep(lbl, trig, lock, 0.0f, 0, false,
                         OFFSET_MAJU_SIMPANG_KANAN_MS, false, 105, 45, JEDA_DIEM_SIMPANG_MS, ACT_TURN_RIGHT);

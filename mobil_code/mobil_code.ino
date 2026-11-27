@@ -125,5 +125,5 @@ void loop() {
     tampilkanTelemetriFSM(line);
   }
 
-  delay(15);
+  delay((statusMisiSaatIni == MISI_JALAN_RUTE_REAL && faseSaatIni == PHASE_ACTION) ? 2 : 15);
 }

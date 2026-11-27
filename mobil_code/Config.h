@@ -82,33 +82,33 @@ const int JEDA_DIEM_SIMPANG_MS = 80;
 
 // 3. Kecepatan belok terukur bertenaga tinggi (Mengatasi gesekan lateral ban karet high-grip)
 // Belok Kanan:
-const int KEC_BELOK_KANAN_MAJU          = 195; // Ditingkatkan (dari 166) agar ke-4 roda ban karet berputar serentak
-const int KEC_BELOK_KANAN_MUNDUR        = 195; // Ditingkatkan (dari 166) agar sisi kanan tidak tertahan beban depan
-const int KEC_BELOK_KANAN_CARI          = 180; // Ditingkatkan (dari 154) agar ban karet tetap bertenaga mendekati 90°
-const int WAKTU_ABAIKAN_SENSOR_KANAN_MS = 330; // Abaikan sensor 330ms: melewati sudut diagonal kotak biru (N2/N10/N15) sebelum scan garis 90°
-const int WAKTU_LEPAS_SUDUT_MIN_MS      = 380; // Timeout pengaman Fase A di atas blind window
+const int KEC_BELOK_KANAN_MAJU          = 175; // Kecepatan putar pasca-kick terkendali agar tidak bablas
+const int KEC_BELOK_KANAN_MUNDUR        = 175; // Torsi seimbang anti-stall ban karet tanpa overshoot
+const int KEC_BELOK_KANAN_CARI          = 160; // Perlambatan halus saat mendekati garis 90°
+const int WAKTU_ABAIKAN_SENSOR_KANAN_MS = 220; // Abaikan sensor 220ms: melewati sudut diagonal kotak biru sebelum scan garis 90° (Belok Kanan)
+const int WAKTU_LEPAS_SUDUT_MIN_MS      = 260; // Timeout pengaman Fase A di atas blind window
 
 // Belok Kiri:
-const int KEC_BELOK_KIRI_MAJU    = 195; // Ditingkatkan (dari 158) agar roda depan tidak stall saat belok kiri
-const int KEC_BELOK_KIRI_MUNDUR  = 205; // +10 ekstra torsi mundur roda kiri (mengatasi gesekan mekanik kiri lebih berat)
+const int KEC_BELOK_KIRI_MAJU    = 175; // Kecepatan putar pasca-kick terkendali agar tidak bablas
+const int KEC_BELOK_KIRI_MUNDUR  = 185; // +10 ekstra torsi mundur roda kiri (mengatasi gesekan mekanik kiri lebih berat)
 
 // 4. Parameter Breakaway Torque Kick (Mendobrak Gesekan Statis Ke-4 Roda Serentak)
 const int PWM_BREAKAWAY_KICK           = 235; // Entakan torsi tinggi agar ke-4 roda serempak bergerak (belok kiri)
 const int PWM_BREAKAWAY_KANAN_KICK     = 230; // Entakan awal belok kanan untuk ban karet high-grip
-const int DURASI_BREAKAWAY_KICK_MS     = 60;  // Durasi sentakan 60ms mendobrak friksi statis awal ban karet
-const int DURASI_RAMP_MS               = 60;  // Durasi transisi awal disamakan dengan breakaway kick
-const int WAKTU_SWEEP_AWAL_MS          = 280; // 280ms: Lepas bayangan garis lama & sudut diagonal kotak biru sebelum scan garis 90° (Belok Kiri)
+const int DURASI_BREAKAWAY_KICK_MS     = 50;  // Durasi sentakan 50ms mendobrak friksi statis awal ban karet
+const int DURASI_RAMP_MS               = 50;  // Durasi transisi awal disamakan dengan breakaway kick
+const int WAKTU_SWEEP_AWAL_MS          = 210; // 210ms: Lepas bayangan garis lama & sudut kotak biru sebelum scan garis 90° (Belok Kiri)
 
 // 5. Parameter Pelurusan Bodi Belakang Panjang 25 cm (Menarik Bodi Belakang 90° Penuh)
 const int DURASI_TAMBAHAN_BELAKANG_MS       = 200; 
 const unsigned long TIMEOUT_PENYESUAIAN_BELAKANG_MS = 160; 
 const int KEC_SESUAI_KANAN_MAJU             = 148; // Ditingkatkan (dari 139) untuk penarikan bodi belakang anti-stall
 const int KEC_SESUAI_KANAN_MUNDUR           = 152; // Ditingkatkan (dari 144)
-const int KEC_SESUAI_KIRI_MAJU              = 180; // Ditingkatkan (dari 146) agar tarikan akhir belok kiri tidak macet di ban karet
-const int KEC_SESUAI_KIRI_MUNDUR            = 188; // Ditingkatkan (dari 152) dengan kompensasi gesekan kiri
-const int DURASI_REM_BELOK_MS               = 18;  // Rem lawan arah singkat 18ms menyerap inersia torsi belok 195 PWM
-const int DURASI_REM_BELOK_KANAN_MS         = 18;  // Rem lawan arah belok kanan singkat 18ms agar berhenti tepat 90°
-const int DURASI_FINISH_BELOK_MS            = 35;  // Putar lanjutan terukur 35ms setelah kunci garis agar bodi 25cm genap 90°
+const int KEC_SESUAI_KIRI_MAJU              = 160; // Disesuaikan dengan torsi putar baru agar tidak bablas
+const int KEC_SESUAI_KIRI_MUNDUR            = 168; // Kompensasi gesekan kiri
+const int DURASI_REM_BELOK_MS               = 32;  // Rem lawan arah 32ms langsung mematikan inersia putar tepat di 90°
+const int DURASI_REM_BELOK_KANAN_MS         = 32;  // Rem lawan arah belok kanan 32ms agar berhenti tepat 90°
+const int DURASI_FINISH_BELOK_MS            = 0;   // 0ms: Langsung rem saat garis 90° terkunci agar tidak bablas
 
 // ================= PARAMETER KHUSUS BELOK KANAN KE-2 =================
 // Mengatasi masalah bablas & memberikan torsi seimbang pada tikungan siku kanan kedua:
@@ -227,11 +227,11 @@ const int PWM_REM_180                          = 125;  // Rem lawan arah lembut 
 
 // ================= PARAMETER KHUSUS BELOK KIRI RUTE PULANG (STATE 21 SIMPANG T) =================
 // Torsi khusus belok kiri saat rute pulang ditingkatkan agar kuat untuk ban karet high-grip
-const int KEC_BELOK_KIRI_PULANG_MAJU           = 198;  // Torsi maju belok kiri pulang ditingkatkan (dari 164) untuk ban karet
-const int KEC_BELOK_KIRI_PULANG_MUNDUR         = 208;  // Torsi mundur belok kiri pulang ditingkatkan (dari 172)
+const int KEC_BELOK_KIRI_PULANG_MAJU           = 178;  // Torsi maju belok kiri pulang terkendali agar tidak bablas
+const int KEC_BELOK_KIRI_PULANG_MUNDUR         = 188;  // Torsi mundur belok kiri pulang anti-stall
 const int PWM_BREAKAWAY_KIRI_PULANG            = 235;  // Sentakan awal bertenaga tinggi mendobrak gesekan statis ke-4 ban karet
-const int KEC_SESUAI_KIRI_PULANG_MAJU          = 182;  // Torsi pendekatan garis ditingkatkan (dari 148) agar genap 90°
-const int KEC_SESUAI_KIRI_PULANG_MUNDUR        = 190;  // Torsi mundur kiri pendekatan garis (dari 154)
+const int KEC_SESUAI_KIRI_PULANG_MAJU          = 162;  // Torsi pendekatan garis terkendali agar genap 90°
+const int KEC_SESUAI_KIRI_PULANG_MUNDUR        = 170;  // Torsi mundur kiri pendekatan garis
 
 
 
