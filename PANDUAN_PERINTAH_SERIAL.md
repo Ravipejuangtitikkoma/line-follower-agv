@@ -91,6 +91,7 @@ Gunakan daftar ringkas ini untuk langsung menyalin (*copy-paste*) perintah di Se
 | `TEST_ENCODER` | **Receiver USB** | Baca pulsa encoder secara *real-time* selama 5 detik (`20` sampel). |
 | `RESET_ENC` | **Receiver USB** | Nolkan hitungan pulsa encoder roda kiri. |
 | `TEST_RODA` | **Receiver USB** | Tes 4 arah motor bergantian *(angkat roda mobil dari lantai dulu!)*. |
+| `TEST_KIRI` | **Receiver USB** | Tes putar poros kiri selama 2 detik. |
 | `TEST_KANAN` | **Receiver USB** | Tes putar poros kanan selama 2 detik. |
 | `TEST_MUNDUR_KANAN` | **Receiver USB** | Tes roda kanan bergerak mundur (Pin 17) selama 2 detik. |
 
@@ -346,6 +347,7 @@ Idx | Label               | Trig     | JarakCm | PauseMs | Aksi
 | `TEST_ENCODER` | Mencetak `PinA`, `PinB`, `Quad`, `A`, `B`, dan `cm` setiap 250 ms selama 5 detik (`20` baris). |
 | `RESET_ENC` | `>>> [RESET_ENC] Pulsa encoder roda kiri di-nolkan.` |
 | `TEST_RODA` | Menjalankan 4 arah motor berurutan masing-masing 1,5 detik (Pin 25 → 26 → 16 → 17). **Angkat mobil dulu.** |
+| `TEST_KIRI` | Memutar poros kiri selama 2 detik (kanan maju, kiri mundur). |
 | `TEST_KANAN` | Memutar poros kanan selama 2 detik (kiri maju, kanan mundur). |
 | `TEST_MUNDUR_KANAN` | Menggerakkan roda kanan mundur (Pin 17) selama 2 detik. |
 

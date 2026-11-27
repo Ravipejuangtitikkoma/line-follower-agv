@@ -11,22 +11,24 @@
 // File : LoRaComm.h
 // Deskripsi:
 //   - Menginisialisasi radio LoRa internal Mappi32 (915 MHz, SyncWord 0x34,
-//     SF7, BW 125kHz, TxPower 14 dBm, SPI 1 MHz, CRC ON)
+//     SF7, BW 125kHz, CR 4/6, Preamble 12, TxPower 12 dBm, SPI 1 MHz, CRC ON)
+//   - Menjaga mode RX_CONTINUOUS sejati lewat pin DIO0 (GPIO 27) + auto re-arm
 //   - Menerima perintah operator nirkabel (format "#seq|CMD" atau "CMD" polos)
-//   - Deduplikasi perintah retry selama 5 detik & membalas ACK + status AGV
+//   - Pre-ACK instan untuk perintah uji blocking (TEST_*) & deduplikasi retry
 // ====================================================================
 
 #define AGV_LORA_BAND       915E6
 #define AGV_LORA_SYNC_WORD  0x34
 #define AGV_LORA_SF         7
 #define AGV_LORA_BW         125E3
-#define AGV_LORA_TX_POWER   14
+#define AGV_LORA_TX_POWER   12
 
-static bool          loraAktif     = false;
-static long          lastLoRaSeq   = -1;
-static unsigned long lastLoRaSeqMs = 0;
-static String        lastLoRaCmd   = "";
-static String        lastLoRaAck   = "";
+static bool          loraAktif       = false;
+static long          lastLoRaSeq     = -1;
+static unsigned long lastLoRaSeqMs   = 0;
+static String        lastLoRaCmd     = "";
+static String        lastLoRaAck     = "";
+static unsigned long lastLoRaRearmMs = 0;
 
 // Helper nama singkat status misi untuk balasan ACK LoRa
 inline const char* loraNamaStatusMisi() {
@@ -38,55 +40,91 @@ inline const char* loraNamaStatusMisi() {
   }
 }
 
-// Inisialisasi LoRa internal Mappi32 secara aman (non-blocking bila gagal)
+// Terapkan seluruh parameter radio LoRa agar sinkron 100% dengan Remote Sender
+inline void konfigurasiParameterLoRaAGV() {
+  LoRa.setTxPower(AGV_LORA_TX_POWER);
+  LoRa.setSpreadingFactor(AGV_LORA_SF);
+  LoRa.setSignalBandwidth(AGV_LORA_BW);
+  LoRa.setCodingRate4(6);
+  LoRa.setPreambleLength(12);
+  LoRa.setSyncWord(AGV_LORA_SYNC_WORD);
+  LoRa.enableCrc();
+  LoRa.receive();
+  lastLoRaRearmMs = millis();
+}
+
+// Inisialisasi LoRa internal Mappi32 secara aman (dengan retry saat boot, non-blocking bila gagal)
 inline void initLoRaAGV() {
+  pinMode(pinLoRa_DIO0, INPUT);
   SPI.begin(pinLoRa_SCK, pinLoRa_MISO, pinLoRa_MOSI, pinLoRa_SS);
   LoRa.setPins(pinLoRa_SS, pinLoRa_RST, pinLoRa_DIO0);
   LoRa.setSPIFrequency(1E6);
 
-  if (!LoRa.begin(AGV_LORA_BAND)) {
+  bool ok = false;
+  for (int i = 0; i < 5; i++) {
+    if (LoRa.begin(AGV_LORA_BAND)) {
+      ok = true;
+      break;
+    }
+    delay(150);
+  }
+
+  if (!ok) {
     loraAktif = false;
     Serial.println(F("[LORA] GAGAL inisialisasi SX1276/RFM95! Mode Serial/Otonom tetap aktif."));
     return;
   }
 
-  LoRa.setTxPower(AGV_LORA_TX_POWER);
-  LoRa.setSpreadingFactor(AGV_LORA_SF);
-  LoRa.setSignalBandwidth(AGV_LORA_BW);
-  LoRa.setSyncWord(AGV_LORA_SYNC_WORD);
-  LoRa.enableCrc();
-  LoRa.receive();
-
+  konfigurasiParameterLoRaAGV();
   loraAktif = true;
-  Serial.println(F("[LORA] Radio LoRa AGV AKTIF (915.0 MHz, Sync=0x34, SF7, BW=125kHz, Tx=14dBm, SPI=1MHz, CRC=ON)."));
+  Serial.println(F("[LORA] Radio LoRa AGV AKTIF (915.0 MHz, Sync=0x34, SF7, BW=125kHz, CR4/6, Tx=12dBm, RX_CONTINUOUS DIO0)."));
 }
 
-// Kirim paket balasan ACK lewat LoRa lalu segera kembali ke mode RX
+// Kirim paket balasan ACK lewat LoRa lalu segera kembali ke mode RX_CONTINUOUS
 inline void kirimBalasanLoRa(const String& payload) {
   if (!loraAktif) return;
-  delay(20);
+  delay(12);
   LoRa.beginPacket();
   LoRa.print(payload);
   LoRa.endPacket();
+  LoRa.idle();
+  delay(2);
   LoRa.receive();
+  lastLoRaRearmMs = millis();
 }
 
-// Cek paket LoRa masuk; kembalikan true jika ada perintah valid yang diproses
+// Cek paket LoRa masuk via DIO0 (menjaga RX_CONTINUOUS); kembalikan true jika ada perintah valid
 inline bool cekPerintahLoRa() {
   if (!loraAktif) return false;
 
+  // Jangan memanggil parsePacket() saat DIO0 LOW agar radio tidak berpindah ke RX_SINGLE
+  if (digitalRead(pinLoRa_DIO0) == LOW) {
+    if ((statusMisiSaatIni != MISI_JALAN_RUTE_REAL || faseSaatIni == PHASE_FOLLOW) &&
+        (millis() - lastLoRaRearmMs >= 5000UL)) {
+      LoRa.receive();
+      lastLoRaRearmMs = millis();
+    }
+    return false;
+  }
+
   int packetSize = LoRa.parsePacket();
-  if (packetSize <= 0) return false;
+  if (packetSize <= 0) {
+    LoRa.receive();
+    lastLoRaRearmMs = millis();
+    return false;
+  }
 
   String raw = "";
   while (LoRa.available()) {
     raw += (char)LoRa.read();
   }
-  raw.trim();
-  if (raw.length() == 0) return false;
-
   int   rssi = LoRa.packetRssi();
   float snr  = LoRa.packetSnr();
+  LoRa.receive();
+  lastLoRaRearmMs = millis();
+
+  raw.trim();
+  if (raw.length() == 0) return false;
 
   long   seqNum    = -1;
   String tagPrefix = "";
@@ -109,7 +147,7 @@ inline bool cekPerintahLoRa() {
   String cmdUpper = cmd;
   cmdUpper.toUpperCase();
 
-  // Deduplikasi bila controller mengirim ulang seq yang sama karena ACK sempat hilang
+  // Deduplikasi bila controller mengirim ulang seq + cmd yang sama karena ACK sempat hilang
   if (seqNum >= 0 && seqNum == lastLoRaSeq && cmdUpper == lastLoRaCmd && (millis() - lastLoRaSeqMs < 5000UL) && lastLoRaAck.length() > 0) {
     Serial.print("[LORA RX RETRY] \"");
     Serial.print(raw);
@@ -133,18 +171,33 @@ inline bool cekPerintahLoRa() {
     int maxIdx = (jumlahStepAktif > 0) ? (jumlahStepAktif - 1) : 0;
     ack = "ACK:" + tagPrefix + "PONG|" + String(loraNamaStatusMisi()) +
           "|" + String(namaRuteAktif) + "|STEP:" + String(stepIdxSaatIni) + "/" + String(maxIdx);
+    lastLoRaSeq   = seqNum;
+    lastLoRaSeqMs = millis();
+    lastLoRaCmd   = cmdUpper;
+    lastLoRaAck   = ack;
+    kirimBalasanLoRa(ack);
+  } else if (cmdUpper.startsWith("TEST_")) {
+    // Pre-ACK terlebih dahulu karena TEST_* menahan eksekusi 2-8 detik (mencegah timeout/retry palsu di Sender)
+    int maxIdx = (jumlahStepAktif > 0) ? (jumlahStepAktif - 1) : 0;
+    ack = "ACK:" + tagPrefix + cmdUpper + "|" + String(loraNamaStatusMisi()) +
+          "|STEP:" + String(stepIdxSaatIni) + "/" + String(maxIdx);
+    lastLoRaSeq   = seqNum;
+    lastLoRaSeqMs = millis();
+    lastLoRaCmd   = cmdUpper;
+    lastLoRaAck   = ack;
+    kirimBalasanLoRa(ack);
+    prosesPerintah(cmd);
   } else {
     prosesPerintah(cmd);
     int maxIdx = (jumlahStepAktif > 0) ? (jumlahStepAktif - 1) : 0;
     ack = "ACK:" + tagPrefix + cmdUpper + "|" + String(loraNamaStatusMisi()) +
           "|STEP:" + String(stepIdxSaatIni) + "/" + String(maxIdx);
+    lastLoRaSeq   = seqNum;
+    lastLoRaSeqMs = millis();
+    lastLoRaCmd   = cmdUpper;
+    lastLoRaAck   = ack;
+    kirimBalasanLoRa(ack);
   }
 
-  lastLoRaSeq   = seqNum;
-  lastLoRaSeqMs = millis();
-  lastLoRaCmd   = cmdUpper;
-  lastLoRaAck   = ack;
-
-  kirimBalasanLoRa(ack);
   return true;
 }

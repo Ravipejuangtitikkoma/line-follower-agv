@@ -4,6 +4,7 @@
 // Board : Mappi32 by KMtek (LoRa Internal RFM95 / SX1276)
 // Fungsi:
 //   - Mengunci seluruh pin motor AGV ke LOW agar aman saat uji radio
+//   - Menjaga mode RX_CONTINUOUS sejati lewat pin DIO0 (GPIO 27)
 //   - Menerima paket dari ESP32 + MRV-RFM95W (PING / perintah AGV)
 //   - Mengirimkan balasan ACK + RSSI ke pengirim dan mengedipkan LED GPIO 5
 //
@@ -32,7 +33,7 @@
 #define LORA_SYNC_WORD  0x34
 #define LORA_SF         7
 #define LORA_BW         125E3
-#define LORA_TX_POWER   14      // dBm (stabil terhadap saturasi jarak dekat)
+#define LORA_TX_POWER   12      // dBm (stabil terhadap saturasi jarak dekat & hemat arus TX)
 
 // --- 3. PIN MOTOR AGV (DIKUNCI MATI DEMI KEAMANAN SAAT UJI RADIO) ---
 const int pinMajuKiri    = 25;
@@ -53,7 +54,7 @@ void kunciMotorAman() {
 }
 
 void kirimBalasan(const String& pesanAck) {
-  delay(40);
+  delay(12);
   digitalWrite(LED_PIN, HIGH);
 
   Serial.print(">>> [TX ACK BALASAN] \"");
@@ -63,6 +64,8 @@ void kirimBalasan(const String& pesanAck) {
   LoRa.beginPacket();
   LoRa.print(pesanAck);
   LoRa.endPacket();
+  LoRa.idle();
+  delay(2);
   LoRa.receive();
 
   digitalWrite(LED_PIN, LOW);
@@ -76,6 +79,7 @@ void setup() {
 
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
+  pinMode(LORA_DIO0, INPUT);
 
   Serial.println("\n=======================================================");
   Serial.println("   TEST LORA RECEIVER: MAPPI32 (INTERNAL SX1276)       ");
@@ -90,7 +94,16 @@ void setup() {
   Serial.print(LORA_BAND / 1E6, 1);
   Serial.println(" MHz...");
 
-  if (!LoRa.begin(LORA_BAND)) {
+  bool ok = false;
+  for (int i = 0; i < 5; i++) {
+    if (LoRa.begin(LORA_BAND)) {
+      ok = true;
+      break;
+    }
+    delay(150);
+  }
+
+  if (!ok) {
     Serial.println("[ERROR] Gagal inisialisasi LoRa internal Mappi32!");
     while (1) {
       digitalWrite(LED_PIN, HIGH);
@@ -103,38 +116,48 @@ void setup() {
   LoRa.setTxPower(LORA_TX_POWER);
   LoRa.setSpreadingFactor(LORA_SF);
   LoRa.setSignalBandwidth(LORA_BW);
+  LoRa.setCodingRate4(6);
+  LoRa.setPreambleLength(12);
   LoRa.setSyncWord(LORA_SYNC_WORD);
   LoRa.enableCrc();
   LoRa.receive();
 
-  Serial.println("[OK] LoRa Mappi32 siap menerima paket! (SyncWord=0x34, SF=7, BW=125kHz, Tx=14dBm, SPI=1MHz, CRC=ON)");
+  Serial.println("[OK] LoRa Mappi32 siap menerima paket! (SyncWord=0x34, SF=7, BW=125kHz, CR4/6, Tx=12dBm, RX_CONTINUOUS DIO0)");
 }
 
 void loop() {
-  int packetSize = LoRa.parsePacket();
-  if (packetSize > 0) {
-    String pesan = "";
-    while (LoRa.available()) {
-      pesan += (char)LoRa.read();
-    }
-    pesan.trim();
-
-    int   rssi = LoRa.packetRssi();
-    float snr  = LoRa.packetSnr();
-
-    digitalWrite(LED_PIN, HIGH);
-    Serial.print("\n<<< [RX DITERIMA] \"");
-    Serial.print(pesan);
-    Serial.print("\" | RSSI: ");
-    Serial.print(rssi);
-    Serial.print(" dBm | SNR: ");
-    Serial.print(snr, 2);
-    Serial.println(" dB");
-    digitalWrite(LED_PIN, LOW);
-
-    String balasan = "ACK:" + pesan + " [RSSI:" + String(rssi) + "dBm]";
-    kirimBalasan(balasan);
+  if (digitalRead(LORA_DIO0) == LOW) {
+    delay(2);
+    return;
   }
 
-  delay(5);
+  int packetSize = LoRa.parsePacket();
+  if (packetSize <= 0) {
+    LoRa.receive();
+    delay(2);
+    return;
+  }
+
+  String pesan = "";
+  while (LoRa.available()) {
+    pesan += (char)LoRa.read();
+  }
+  int   rssi = LoRa.packetRssi();
+  float snr  = LoRa.packetSnr();
+  LoRa.receive();
+
+  pesan.trim();
+
+  digitalWrite(LED_PIN, HIGH);
+  Serial.print("\n<<< [RX DITERIMA] \"");
+  Serial.print(pesan);
+  Serial.print("\" | RSSI: ");
+  Serial.print(rssi);
+  Serial.print(" dBm | SNR: ");
+  Serial.print(snr, 2);
+  Serial.println(" dB");
+  digitalWrite(LED_PIN, LOW);
+
+  String balasan = "ACK:" + pesan + " [RSSI:" + String(rssi) + "dBm]";
+  kirimBalasan(balasan);
 }

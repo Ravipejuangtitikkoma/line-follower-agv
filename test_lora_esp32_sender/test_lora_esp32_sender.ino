@@ -4,7 +4,8 @@
 // Board : ESP32 Dev Module + Modul Eksternal MRV-RFM95W
 // Fungsi:
 //   - Mengirim perintah AGV ke Mappi32 dengan format #<seq>|<cmd>
-//   - Auto-retry hingga 3x (timeout 500ms/percobaan) sampai ACK diterima
+//   - Menjaga RX_CONTINUOUS via pin DIO0 (GPIO 26) + fallback polling SPI
+//   - Auto-retry hingga 3x (timeout 800ms/percobaan) & auto-recovery radio
 //   - Auto-PING off secara default (ketik 'AUTO' untuk nyalakan/matikan)
 //
 // LIBRARY WAJIB (Arduino IDE -> Library Manager):
@@ -41,19 +42,51 @@
 #define LORA_SYNC_WORD  0x34
 #define LORA_SF         7
 #define LORA_BW         125E3
-#define LORA_TX_POWER   14      // dBm (stabil terhadap lonjakan arus TX & jarak dekat)
+#define LORA_TX_POWER   12      // dBm (hemat arus lonjakan TX untuk cegah brownout di kabel jumper)
 
 #define MAX_LORA_RETRY         3
-#define TIMEOUT_ACK_LORA_MS  500UL
+#define TIMEOUT_ACK_LORA_MS  650UL
 
 static bool          autoPingAktif   = false;
 static unsigned long waktuPingAkhir  = 0;
 static unsigned long seqCounter      = 0;
 
+bool initAtauResetLoRaSender(int maxCoba = 5) {
+  pinMode(LORA_DIO0, INPUT);
+  LoRa.end();
+  delay(20);
+
+  SPI.begin(LORA_SCK, LORA_MISO, LORA_MOSI, LORA_SS);
+  LoRa.setPins(LORA_SS, LORA_RST, LORA_DIO0);
+  LoRa.setSPIFrequency(1E6); // SPI 1 MHz stabil di kabel jumper + level shifter
+
+  bool ok = false;
+  for (int i = 0; i < maxCoba; i++) {
+    if (LoRa.begin(LORA_BAND)) {
+      ok = true;
+      break;
+    }
+    delay(200);
+  }
+  if (!ok) return false;
+
+  LoRa.setTxPower(LORA_TX_POWER);
+  LoRa.setSpreadingFactor(LORA_SF);
+  LoRa.setSignalBandwidth(LORA_BW);
+  LoRa.setCodingRate4(6);
+  LoRa.setPreambleLength(12);
+  LoRa.setSyncWord(LORA_SYNC_WORD);
+  LoRa.enableCrc();
+  LoRa.receive();
+  return true;
+}
+
 void kirimPaketLoRaRaw(const String& payload) {
   LoRa.beginPacket();
   LoRa.print(payload);
   LoRa.endPacket();
+  LoRa.idle();
+  delay(2);
   LoRa.receive();
 }
 
@@ -68,6 +101,11 @@ bool kirimPerintahAndal(const String& cmd) {
     if (attempt == 1) {
       Serial.print(">>> [TX LORA] \"");
     } else {
+      if (attempt == 3) {
+        Serial.println("[RECOVERY] Me-refresh modul MRV-RFM95W sebelum percobaan ke-3...");
+        initAtauResetLoRaSender(2);
+      }
+      delay(35 * attempt);
       Serial.print(">>> [RETRY ");
       Serial.print(attempt);
       Serial.print("/");
@@ -79,60 +117,86 @@ bool kirimPerintahAndal(const String& cmd) {
 
     kirimPaketLoRaRaw(payload);
 
-    unsigned long tStart = millis();
+    unsigned long tStart            = millis();
+    bool          didFallbackSpiPoll = false;
     while (millis() - tStart < TIMEOUT_ACK_LORA_MS) {
-      int packetSize = LoRa.parsePacket();
-      if (packetSize > 0) {
-        String rx = "";
-        while (LoRa.available()) {
-          rx += (char)LoRa.read();
-        }
-        rx.trim();
-        int   rssi = LoRa.packetRssi();
-        float snr  = LoRa.packetSnr();
+      bool dioHigh      = (digitalRead(LORA_DIO0) == HIGH);
+      bool pollingSpiOk = (attempt >= 2) && !didFallbackSpiPoll && (millis() - tStart >= 250UL);
 
-        if (rx.startsWith(expectedPrefix)) {
-          Serial.print("<<< [RX ACK] \"");
-          Serial.print(rx);
-          Serial.print("\" | RSSI: ");
-          Serial.print(rssi);
-          Serial.print(" dBm | SNR: ");
-          Serial.print(snr, 2);
-          Serial.println(" dB");
-          return true;
-        } else if (rx.length() > 0) {
-          Serial.print("<<< [RX LAIN] \"");
-          Serial.print(rx);
-          Serial.print("\" | RSSI: ");
-          Serial.print(rssi);
-          Serial.println(" dBm");
+      if (dioHigh || pollingSpiOk) {
+        if (pollingSpiOk) didFallbackSpiPoll = true;
+
+        int packetSize = LoRa.parsePacket();
+        if (packetSize > 0) {
+          String rx = "";
+          while (LoRa.available()) {
+            rx += (char)LoRa.read();
+          }
+          int   rssi = LoRa.packetRssi();
+          float snr  = LoRa.packetSnr();
+          LoRa.receive();
+          rx.trim();
+
+          if (!dioHigh) {
+            Serial.println("[INFO] ACK diterima via polling SPI, cek kabel jumper D0 -> GPIO 26 agar lebih stabil.");
+          }
+
+          if (rx.startsWith(expectedPrefix)) {
+            Serial.print("<<< [RX ACK] \"");
+            Serial.print(rx);
+            Serial.print("\" | RSSI: ");
+            Serial.print(rssi);
+            Serial.print(" dBm | SNR: ");
+            Serial.print(snr, 2);
+            Serial.println(" dB");
+            return true;
+          } else if (rx.length() > 0) {
+            Serial.print("<<< [RX LAIN] \"");
+            Serial.print(rx);
+            Serial.print("\" | RSSI: ");
+            Serial.print(rssi);
+            Serial.println(" dBm");
+          }
+        } else {
+          LoRa.receive();
         }
       }
-      delay(5);
+      delay(1);
     }
   }
 
   Serial.println("[GAGAL] Tidak ada ACK dari Mappi32 setelah 3x percobaan (cek jarak/daya/antena).");
+  Serial.println("[RECOVERY] Me-refresh modul MRV-RFM95W...");
+  initAtauResetLoRaSender(2);
   return false;
 }
 
 void cekPaketMasukPasif() {
+  if (digitalRead(LORA_DIO0) == LOW) return;
+
   int packetSize = LoRa.parsePacket();
-  if (packetSize <= 0) return;
+  if (packetSize <= 0) {
+    LoRa.receive();
+    return;
+  }
 
   String pesan = "";
   while (LoRa.available()) {
     pesan += (char)LoRa.read();
   }
+  int   rssi = LoRa.packetRssi();
+  float snr  = LoRa.packetSnr();
+  LoRa.receive();
+
   pesan.trim();
   if (pesan.length() == 0) return;
 
   Serial.print("<<< [RX LORA] \"");
   Serial.print(pesan);
   Serial.print("\" | RSSI: ");
-  Serial.print(LoRa.packetRssi());
+  Serial.print(rssi);
   Serial.print(" dBm | SNR: ");
-  Serial.print(LoRa.packetSnr(), 2);
+  Serial.print(snr, 2);
   Serial.println(" dB");
 }
 
@@ -160,31 +224,17 @@ void setup() {
   Serial.println("\n=======================================================");
   Serial.println("   REMOTE LORA CONTROLLER: ESP32 + MRV-RFM95W          ");
   Serial.println("=======================================================");
-
-  SPI.begin(LORA_SCK, LORA_MISO, LORA_MOSI, LORA_SS);
-  LoRa.setPins(LORA_SS, LORA_RST, LORA_DIO0);
-  LoRa.setSPIFrequency(1E6); // SPI 1 MHz stabil di kabel jumper + level shifter
-
   Serial.print("[INIT] Memulai LoRa pada ");
   Serial.print(LORA_BAND / 1E6, 1);
   Serial.println(" MHz...");
 
-  if (!LoRa.begin(LORA_BAND)) {
-    Serial.println("[ERROR] Gagal inisialisasi MRV-RFM95W!");
-    Serial.println("Cek wiring: VIN->5V, GND->GND, D0->26, SCK->18, MISO->19, MOSI->23, CS->5, RST->27.");
-    while (1) {
-      delay(500);
-    }
+  while (!initAtauResetLoRaSender(5)) {
+    Serial.println("[ERROR] Gagal inisialisasi MRV-RFM95W! Coba lagi dalam 2 detik...");
+    Serial.println("        Cek kabel: VIN->5V, GND->GND, D0->26, SCK->18, MISO->19, MOSI->23, CS->5, RST->27.");
+    delay(2000);
   }
 
-  LoRa.setTxPower(LORA_TX_POWER);
-  LoRa.setSpreadingFactor(LORA_SF);
-  LoRa.setSignalBandwidth(LORA_BW);
-  LoRa.setSyncWord(LORA_SYNC_WORD);
-  LoRa.enableCrc();
-  LoRa.receive();
-
-  Serial.println("[OK] Remote LoRa siap! (SyncWord=0x34, SF=7, BW=125kHz, Tx=14dBm, SPI=1MHz, CRC=ON)");
+  Serial.println("[OK] Remote LoRa siap! (SyncWord=0x34, SF=7, BW=125kHz, CR4/6, Tx=12dBm, RX_CONTINUOUS DIO0)");
   cetakPanduan();
   waktuPingAkhir = millis();
 }
@@ -216,9 +266,9 @@ void loop() {
 
   // 3. Auto-PING berkala tiap 3 detik jika diaktifkan manual
   if (autoPingAktif && (millis() - waktuPingAkhir >= 3000)) {
-    waktuPingAkhir = millis();
     kirimPerintahAndal("PING");
+    waktuPingAkhir = millis();
   }
 
-  delay(10);
+  delay(5);
 }
